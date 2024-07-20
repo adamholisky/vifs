@@ -9,7 +9,9 @@ extern "C"
 #include <stdint.h>
 #include <stdbool.h>
 
-#define VIFS_DEV
+#ifndef VIFS_OS
+	#define VIFS_DEV
+#endif
 
 // We define function aliases here to support multiple systems
 #ifdef VIFS_DEV
@@ -18,7 +20,12 @@ extern "C"
 	#define vfs_panic printf
 	#define vfs_debugf printf
 #else
+	#include <kernel_common.h>
+
 	#define vfs_malloc kmalloc
+	#define vfs_realloc krealloc
+	#define vfs_panic debugf
+	#define vfs_debugf debugf
 #endif
 
 typedef uint64_t inode_id;
