@@ -4,5 +4,19 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+
+			{
+				"name": "Debug",
+				"type": "gdb",
+				"request": "launch",
+				"target": "./vifs",
+				"cwd": "${workspaceRoot}",
+				"valuesFormatting": "parseText"
+			}
+		]
+	}
 }

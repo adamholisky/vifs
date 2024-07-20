@@ -34,28 +34,51 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 
 int main( int argc, char *argv[] ) {
 
-	if( !vfs_initalize() ) {
+	int vfs_init_err = vfs_initalize();
+	if( vfs_init_err != 0 ) {
 		vfs_panic( "VFS initalizatoin failed.\n" );
 
 		return 1;
 	}
 
-	if( !rfs_initalize() ) {
+	vfs_debugf( "VFS Initalizing done.\n" );
+
+	int rfs_init_err = rfs_initalize();
+	if( rfs_init_err != 0 ) {
 		vfs_panic( "RFS initalization failed.\n" );
 
 		return 1;
 	}
 
-	if( !vfs_mount( FS_TYPE_RFS, NULL, "/" ) ) {
+	vfs_debugf( "RFS initalizing done.\n" );
+
+	int mount_err = vfs_mount( FS_TYPE_RFS, NULL, "/" );
+	if( mount_err != 0 ) {
 		vfs_panic( "Could not mount root fs.\n" );
+
+		return 1;
 	}
+
+	vfs_debugf( "Mounted root.\n" );
+
+	int create_err = vfs_create( VFS_INODE_TYPE_FILE, "/", "test.txt" );
+	if( create_err != 0 ) {
+		vfs_panic( "Could not create test.txt\n" );
+	}
+
 
 
 	return 0;
 }
 
+/******************************************************************************/
+/*        Everything below here should be ran by the kernel at some point     */
+/******************************************************************************/
+
 vfs_filesystem *file_systems;
 vfs_inode root_inode;
+vfs_inode *inode_index_tail;
+inode_id vfs_inode_id_top;
 
 /**
  * @brief 
@@ -69,6 +92,10 @@ int vfs_initalize( void ) {
 	root_inode.type = VFS_INODE_TYPE_DIR;
 	root_inode.id = 1;
 	root_inode.is_mount_point = false;
+
+	inode_index_tail = &root_inode;
+
+	return 0;
 }
 
 /**
@@ -77,7 +104,7 @@ int vfs_initalize( void ) {
  * @param fs 
  * @return int 
  */
-int vfs_register_fs( vfs_filesystem *fs ) {
+vfs_filesystem *vfs_register_fs( vfs_filesystem *fs ) {
 	fs = vfs_malloc( sizeof(vfs_filesystem) );
 	fs->next_fs = NULL;
 
@@ -91,6 +118,8 @@ int vfs_register_fs( vfs_filesystem *fs ) {
 
 		root->next_fs = fs;
 	}
+
+	return fs;
 }
 
 /**
@@ -136,7 +165,7 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	mount_point = vfs_lookup_inode_ptr( path );
 	
 	if( mount_point == NULL ) {
-		vfs_debugf( "Path \"%s\" not found, mount failed.\n" );
+		vfs_debugf( "Path \"%s\" not found, mount failed.\n", path );
 		return -1;
 	}
 
@@ -148,14 +177,14 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	}
 
 	if( mount_point->type != VFS_INODE_TYPE_DIR ) {
-		vfs_debugf( "Mount point \"%s\" is not a directory.\n" );
+		vfs_debugf( "Mount point \"%s\" is not a directory.\n", path );
 		return -1;
 	}
 	
 	mount_point->fs_type = fs_type;
 	mount_point->is_mount_point = true;
 
-	return 0;
+	return fs->op.mount( mount_point->id, path );
 }
 
 /**
@@ -181,9 +210,58 @@ inode_id vfs_lookup_inode( char *path ) {
  * @return vfs_inode* 
  */
 vfs_inode *vfs_lookup_inode_ptr( char *path ) {
+	vfs_inode *ret_val = NULL;
+
 	if( strcmp( path, "/" ) == 0 ) {
 		return &root_inode;
 	}
 
 	// TODO... (lol)
+
+	return ret_val;
+}
+
+/**
+ * @brief 
+ * 
+ * @return vfs_inode* 
+ */
+vfs_inode *vfs_allocate_inode( void ) {
+	vfs_inode *node = vfs_malloc( sizeof(vfs_inode) );
+
+	node->fs_type = 0;
+	node->id = vfs_inode_id_top++;
+	node->type = 0;
+	node->is_mount_point = false;
+
+	inode_index_tail->next_inode = node;
+	inode_index_tail = node;
+
+	return node;
+}
+
+/**
+ * @brief Creates an inode of type at path with name
+ * 
+ * @param type 
+ * @param path 
+ * @param name 
+ * @return int 
+ */
+int vfs_create( uint8_t type, char *path, char *name ) {
+	vfs_inode *parent_node = vfs_lookup_inode_ptr( path );
+
+	if( parent_node == NULL ) {
+		vfs_debugf( "Cannot find path \"%s\"", path );
+		return -1;
+	}
+
+	if( parent_node->type != VFS_INODE_TYPE_DIR ) {
+		vfs_debugf( "Cannot create at \"%s\", not a directory.\n", path );
+		return -1;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( parent_node->fs_type );
+
+	return fs->op.create( parent_node->id, type, path, name );
 }
