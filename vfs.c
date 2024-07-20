@@ -62,11 +62,24 @@ int main( int argc, char *argv[] ) {
 	vfs_debugf( "Mounted root.\n" );
 
 	int create_err = vfs_create( VFS_INODE_TYPE_FILE, "/", "test.txt" );
-	if( create_err != 0 ) {
+	if( create_err < 0 ) {
 		vfs_panic( "Could not create test.txt\n" );
 	}
 
+	vfs_debugf( "Created inode %d\n", create_err );
 
+	int write_err = vfs_write( 2, "Hello, world!", sizeof("Hello, world!"), 0 );
+	if( write_err < 0 ) {
+		vfs_panic( "Error when writing.\n" );
+	}
+
+	char *data = vfs_malloc( sizeof("Hello, world!") );
+	int read_err = vfs_read( 2, data, sizeof("Hello, world!"), 0 );
+	if( read_err < 0 ) {
+		vfs_panic( "Error when reading.\n" );
+	}
+
+	vfs_debugf( "Data read: \"%s\"\n", data );
 
 	return 0;
 }
@@ -94,6 +107,8 @@ int vfs_initalize( void ) {
 	root_inode.is_mount_point = false;
 
 	inode_index_tail = &root_inode;
+
+	vfs_inode_id_top = 2;
 
 	return 0;
 }
@@ -204,6 +219,29 @@ inode_id vfs_lookup_inode( char *path ) {
 }
 
 /**
+ * @brief Gets inode structure from inode id
+ * 
+ * @param id 
+ * @return vfs_inode* 
+ */
+vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id ) {
+	vfs_inode *ret_val = NULL;
+	bool found = false;
+	vfs_inode *head = &root_inode;
+
+	do {
+		if( head->id == id ) {
+			ret_val = head;
+			found = true;
+		}
+
+		head = head->next_inode;
+	} while( head != NULL && !found );
+
+	return ret_val;
+}
+
+/**
  * @brief Returns a vfs_inode object represented by path
  * 
  * @param path 
@@ -264,4 +302,48 @@ int vfs_create( uint8_t type, char *path, char *name ) {
 	vfs_filesystem *fs = vfs_get_fs( parent_node->fs_type );
 
 	return fs->op.create( parent_node->id, type, path, name );
+}
+
+/**
+ * @brief Writes data to inode id startign at offset for size bytes
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset 
+ * @return int number of bytes written, -1 if error
+ */
+int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		vfs_debugf( "inode ID %d not found, aborting write.\n", id );
+		return -1;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	return fs->op.write( id, data, size, offset );
+}
+
+/**
+ * @brief Reads size bytes from inode id + offset into data
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset
+ * @return int 
+ */
+int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		vfs_debugf( "inode ID %d not found, aborting read.\n", id );
+		return -1;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	return fs->op.read( id, data, size, offset );
 }

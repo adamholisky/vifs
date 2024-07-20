@@ -14,6 +14,7 @@ extern "C"
 // We define function aliases here to support multiple systems
 #ifdef VIFS_DEV
 	#define vfs_malloc malloc
+	#define vfs_realloc realloc
 	#define vfs_panic printf
 	#define vfs_debugf printf
 #else
@@ -64,11 +65,11 @@ typedef struct {
 
 typedef struct {
 	int (*create)( uint8_t, inode_id, char *, char * );
-	int (*read)( int, uint8_t *, uint64_t );
-	int (*write)( int, uint8_t *, uint64_t, uint64_t );
+	int (*read)( inode_id, uint8_t *, uint64_t, uint64_t );
+	int (*write)( inode_id, uint8_t *, uint64_t, uint64_t );
 	int (*mount)( inode_id, uint8_t * );
 	int (*open)( inode_id );
-	void (*close)( int );
+	void (*close)( inode_id );
 } vfs_operations;
 
 typedef struct {
@@ -88,8 +89,11 @@ vfs_filesystem *vfs_register_fs( vfs_filesystem *fs );
 vfs_filesystem *vfs_get_fs( uint8_t fs_type );
 int vfs_mount( uint8_t fs_type, uint8_t *data, char *path );
 int vfs_create( uint8_t type, char *path, char *name );
+int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 inode_id vfs_lookup_inode( char *path );
 vfs_inode *vfs_lookup_inode_ptr( char *path );
+vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id );
 vfs_inode *vfs_allocate_inode( void );
 
 
