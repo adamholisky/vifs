@@ -32,6 +32,8 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 
 */
 
+#ifdef VIFS_DEV
+
 int main( int argc, char *argv[] ) {
 
 	int vfs_init_err = vfs_initalize();
@@ -83,6 +85,8 @@ int main( int argc, char *argv[] ) {
 
 	return 0;
 }
+
+#endif
 
 /******************************************************************************/
 /*        Everything below here should be ran by the kernel at some point     */
