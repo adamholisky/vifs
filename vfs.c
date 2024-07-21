@@ -3,6 +3,7 @@
 #include <string.h>
 #include "vfs.h"
 #include "rfs.h"
+#include "afs.h"
 
 /*
 
@@ -35,11 +36,6 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 #ifdef VIFS_DEV
 
 int main( int argc, char *argv[] ) {
-	char hello_data[] = "Hello, world!";
-	char hello_data_b[] = "Another testing file.\nMulti-line?\nWooho!\n";
-	char proc_build_num[] = "1984";
-	char proc_magic[] = "NCC-1701-D";
-
 	int vfs_init_err = vfs_initalize();
 	if( vfs_init_err != 0 ) {
 		vfs_panic( "VFS initalizatoin failed.\n" );
@@ -67,6 +63,52 @@ int main( int argc, char *argv[] ) {
 
 	vfs_debugf( "Mounted root.\n" );
 
+	vfs_test_create_dir( "/", "afs" );
+
+	FILE *fp = fopen( "afs.img", "r+" );
+	fseek( fp, 0, SEEK_END );
+	uint64_t size = ftell( fp );
+	rewind( fp );
+
+	uint8_t *drive_data = vfs_malloc( size );
+	
+	uint64_t bytes_read = fread( drive_data, size, 1, fp );
+
+	if( bytes_read != size ) {
+		vfs_panic( "Bytes read failed. Got %ld, expected %ld.\n", bytes_read, size );
+
+		return 1;
+	}
+	
+	int afs_init_err = afs_initalize();
+	if( afs_init_err != 0 ) {
+		vfs_panic( "AFS initalization failed.\n" );
+
+		return 1;
+	}
+	
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs" );
+	if( afs_mount_err != 0 ) {
+		vfs_panic( "Could not mount afs drive.\n" );
+
+		return 1;
+	}
+
+	vfs_test_afs();
+	
+	return 0;
+}
+
+void vfs_test_afs( void ) {
+	
+}
+
+void vfs_test_ramfs( void ) {
+	char hello_data[] = "Hello, world!";
+	char hello_data_b[] = "Another testing file.\nMulti-line?\nWooho!\n";
+	char proc_build_num[] = "1984";
+	char proc_magic[] = "NCC-1701-D";
+
 	vfs_test_create_file( "/", "test.txt", hello_data, sizeof(hello_data) );
 	vfs_test_create_file( "/", "test_2.txt", hello_data_b, sizeof(hello_data_b) );
 	vfs_test_create_dir( "/", "proc" );
@@ -80,10 +122,16 @@ int main( int argc, char *argv[] ) {
 	
 	vfs_test_cat( "/proc/magic" );
 	vfs_test_cat( "/proc/build/number" );
-	
-	return 0;
 }
 
+/**
+ * @brief Test creating a file
+ * 
+ * @param path 
+ * @param name 
+ * @param data 
+ * @param size 
+ */
 void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size ) {
 	int file_inode = vfs_create( VFS_INODE_TYPE_FILE, path, name );
 	if( file_inode < 0 ) {
@@ -96,6 +144,12 @@ void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size 
 	}
 }
 
+/**
+ * @brief Test creating a directory
+ * 
+ * @param path 
+ * @param name 
+ */
 void vfs_test_create_dir( char *path, char *name ) {
 	int file_inode = vfs_mkdir( vfs_lookup_inode(path), path, name );
 	if( file_inode < 0 ) {
@@ -103,6 +157,11 @@ void vfs_test_create_dir( char *path, char *name ) {
 	}
 }
 
+/**
+ * @brief Test listing a file
+ * 
+ * @param path 
+ */
 void vfs_test_ls( char *path ) {
 	char type_dir[] = "DIR ";
 	char type_file[] = "FILE";
@@ -133,6 +192,11 @@ void vfs_test_ls( char *path ) {
 	vfs_debugf( "\n" );
 }
 
+/**
+ * @brief Test cat of a file
+ * 
+ * @param pathname 
+ */
 void vfs_test_cat( char *pathname ) {
 	char *data = vfs_malloc( 1024 );
 	int read_err = vfs_read( vfs_lookup_inode(pathname), data, 1024, 0 );
@@ -143,6 +207,18 @@ void vfs_test_cat( char *pathname ) {
 	vfs_debugf( "cat %s\n", pathname );
 	vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
+}
+
+/**
+ * @brief Simulate a disk read
+ * 
+ * @param drive
+ * @param data 
+ * @param offset 
+ * @param length 
+ */
+uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+
 }
 
 #endif
@@ -265,7 +341,7 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	mount_point->fs_type = fs_type;
 	mount_point->is_mount_point = true;
 
-	return fs->op.mount( mount_point->id, path );
+	return fs->op.mount( mount_point->id, path, data );
 }
 
 /**

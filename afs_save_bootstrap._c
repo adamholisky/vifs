@@ -1,0 +1,333 @@
+void add_files_in_dir( char *dir_name, char *full_path );
+bool bootstrap_format( uint8_t *buff, uint32_t size );
+uint32_t bootstrap_add_name_to_string_table( char * name );
+bool bootstrap_add_file( uint8_t *drive_buff, afs_block_directory *dir, uint8_t *file_buff, uint32_t size, char * name );
+bool bootstrap_cp( char *name, char *name_new, uint8_t *drive_buff, afs_block_directory *dir );
+afs_block_directory* bootstrap_mkdir( uint8_t *drive_buff, afs_block_directory *parent, char *name );
+
+void add_files_in_dir( char *dir_name, char *full_path ) {
+	printf( "add_files_in_dir( \"%s\", \"%s\" );\n", dir_name, full_path );
+
+	//printf( "BBBBBB" );
+
+	DIR *d;
+	struct dirent *dir;
+	char loc_start[] = "/usr/local/osdev/versions/vi/os_root";
+	char loc_full[256];
+
+	char location_fix[25];
+	memset( location_fix, 0, 25 );
+
+	strcat( location_fix, "/" );
+	strcat( location_fix, dir_name );
+	strcat( location_fix, "/" );
+
+	//printf( "AAAAAAA" );
+
+	d = opendir( full_path );
+
+	if(d) {
+		//printf( "....." );
+		while( (dir=readdir(d)) != NULL ) {
+			printf( "found %s", dir->d_name );
+			memset( loc_full, 0, 256 );
+
+			if( strcmp( dir->d_name, "." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			if( strcmp( dir->d_name, ".." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			strcat( loc_full, full_path );
+			strcat( loc_full, "/" );
+			strcat( loc_full, dir->d_name );
+
+			if( dir->d_type == DT_REG ) {
+				strcpy( items[drive_item_count].loc, location_fix );
+				strcpy( items[drive_item_count].name, dir->d_name );
+				strcpy( items[drive_item_count].original_loc, loc_full );
+				items[drive_item_count].type = AFS_BLOCK_TYPE_FILE;
+
+				drive_item_count++;
+			}
+		}
+
+		closedir(d);
+	} else {
+		printf( "d is empty.\n" );
+		return;
+	}
+}
+
+int main( void ) {
+	uint8_t * buff = malloc( drive_size_in_bytes );
+
+	// Step 1 -- Format the drive
+
+	FILE *fp = fopen( afsfile, "r+" );
+
+	bootstrap_format( buff, drive_size_in_bytes );
+
+	afs_block_directory *dir_bin = bootstrap_mkdir( buff, bs_root_dir, "bin" );
+	afs_block_directory *dir_lib = bootstrap_mkdir( buff, bs_root_dir, "lib" );
+	afs_block_directory *dir_etc = bootstrap_mkdir( buff, bs_root_dir, "etc" );
+	afs_block_directory *dir_font = bootstrap_mkdir( buff, bs_root_dir, "font" );
+	afs_block_directory *dir_home = bootstrap_mkdir( buff, bs_root_dir, "home" );
+
+	DIR *d;
+	struct dirent *dir;
+	char loc_start[] = "/usr/local/osdev/versions/vi/os_root";
+	char loc_full[256];
+
+	d = opendir( loc_start );
+
+	if(d) {
+		while( (dir=readdir(d)) != NULL ) {
+			memset( loc_full, 0, 256 );
+
+			if( strcmp( dir->d_name, "." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			if( strcmp( dir->d_name, ".." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			DIR *in_d;
+			struct dirent *in_dirent;
+			strcat( loc_full, loc_start );
+			strcat( loc_full, "/" );
+			strcat( loc_full, dir->d_name );
+
+			printf( "found %s\n", dir->d_name );
+
+			if( dir->d_type == DT_DIR ) {
+				add_files_in_dir( dir->d_name, loc_full );
+			}
+		}
+
+		closedir(d);
+	} else {
+		printf( "d is empty.\n" );
+		return 0;
+	}
+
+	for( int i = 0; i < drive_item_count; i++ ) {
+		afs_block_directory *dir_to_use = NULL;
+
+		if( strstr( items[i].loc, "etc" ) ) { dir_to_use = dir_etc; }
+		if( strstr( items[i].loc, "lib" ) ) { dir_to_use = dir_lib; }
+		if( strstr( items[i].loc, "bin" ) ) { dir_to_use = dir_bin; }
+		if( strstr( items[i].loc, "home" ) ) { dir_to_use = dir_home; }
+		if( strstr( items[i].loc, "font" ) ) { dir_to_use = dir_font; }
+
+		switch( items[i].type ) {
+			case AFS_BLOCK_TYPE_DIRECTORY:
+				printf( "Adding directory \"%s%s\"\n", items[i].loc, items[i].name );
+				break;
+			case AFS_BLOCK_TYPE_FILE:
+				printf( "Adding file \"%s%s\" from \"%s\"\n", items[i].loc, items[i].name, items[i].original_loc );
+
+				bootstrap_cp( items[i].original_loc, items[i].name, buff, dir_to_use );
+				break;
+			default:
+				printf( "ERROR in block type of item %d\n", i );
+		}
+	}
+
+	/*
+	// Step 2 -- Add files to root
+	
+	bootstrap_add_file( buff, bs_root_dir, str_test, strlen( str_test ), "testing.txt" );
+	bootstrap_cp( "hi", "log.txt", buff, bs_root_dir );
+	
+	afs_block_directory *dir_bin = bootstrap_mkdir( buff, bs_root_dir, "bin" );
+	bootstrap_add_file( buff, dir_bin, "do something", strlen( "do something" ), "do_a_thing" );
+	*/
+
+	// Step 3 -- Save drive contents
+
+	size_t written = fwrite( buff, drive_size_in_bytes, 1, fp );
+
+	printf( "ast->nf %d\n", bs_string_table->next_free );
+	printf( "Written: %d\n", written );
+
+	for( int i = 0; i < bs_drive->next_free; i++ ) {
+		if( *(buff + i) != 0 ) {
+			//printf( "%X: %02X\n", i,  *(buff + i) );
+		}
+	}
+
+	printf( "\n" );
+	
+
+	fclose( fp );
+
+	
+	// Step 4 -- Test OS routines and read logic
+
+	file_system.drive = (afs_drive *)buff;
+	file_system.root_dir = bs_root_dir;
+	file_system.string_table = bs_string_table;
+	file_system.next_fd = 0;
+
+	//afs_disply_diagnostic_data( file_system.drive );
+
+	/* vv_file *f = afs_fopen( &file_system, "testing.txt", "r" );
+
+	if( f == NULL ) {
+		printf( "fopen returned null\n" );
+	}
+	
+	char *file_buff = malloc( f->size + 1);
+	memset( file_buff, 0, f->size + 1);
+	
+	uint32_t num_read = afs_fread( &file_system, file_buff, f->size, 1, f );
+
+	printf( "num_read: %d\n", num_read );
+	printf( "data read: \"%s\"\n", file_buff ); */
+
+	printf( "ls /\n" );
+	afs_ls( &file_system, "/" );
+
+	printf( "ls /bin\n" );
+	afs_ls( &file_system, "/bin" );
+
+	printf( "ls /etc\n" );
+	afs_ls( &file_system, "/etc" );
+
+	printf( "ls /lib\n" );
+	afs_ls( &file_system, "/lib" );
+
+	printf( "ls /font\n" );
+	afs_ls( &file_system, "/font" );
+
+	printf( "ls /home\n" );
+	afs_ls( &file_system, "/home" );
+	
+	return 0;
+}	
+
+bool bootstrap_format( uint8_t *buff, uint32_t size ) {
+	bs_drive = (afs_drive *)buff;
+
+	bs_drive->version = AFS_VERSION_1;
+	bs_drive->size = size;
+	bs_drive->name_index = 0;
+	bs_drive->next_free = sizeof( afs_drive );
+
+	bs_string_table = (afs_string_table *)(buff + bs_drive->next_free );
+	bs_drive->next_free = bs_drive->next_free + sizeof( afs_string_table );
+	strcpy( bs_string_table->string[0], "AFS Drive 1" );
+	bs_string_table->next_free++;
+	strcpy( bs_string_table->string[1], "." );
+	bs_string_table->next_free++;
+	strcpy( bs_string_table->string[2], ".." );
+	bs_string_table->next_free++;
+
+	bs_root_dir = (afs_block_directory *)(buff + bs_drive->next_free );
+	bs_drive->root_directory = bs_drive->next_free;
+	bs_root_dir->type = AFS_BLOCK_TYPE_DIRECTORY;
+	bs_root_dir->name_index = 0;
+	bs_root_dir->next_index = 0;
+	memset( bs_root_dir->index, 0, sizeof( afs_index ) * 256 );
+	bs_drive->next_free = bs_drive->next_free + sizeof( afs_block_directory );
+}
+
+/**
+ * @brief Adds a given file to the given directory
+ * 
+ * @param drive_buff Pointer to the buffer containing the drive
+ * @param dir Pointer to the directory to put the file in
+ * @param file_buff Pointer to the buffer containing the file
+ * @param size Size of the file
+ * @param name Name of the file
+ * 
+ * @return true File adding was successful
+ * @return false File adding failed
+ */
+bool bootstrap_add_file( uint8_t *drive_buff, afs_block_directory *dir, uint8_t *file_buff, uint32_t size, char * name ) {
+	afs_file * f = (afs_file *)(drive_buff + bs_drive->next_free);
+	f->name_index = bootstrap_add_name_to_string_table( name );
+	f->block_size = size + 1024;
+	f->file_size = size;
+	f->type = AFS_BLOCK_TYPE_FILE;
+
+	dir->index[ dir->next_index ].start = bs_drive->next_free;
+	dir->index[ dir->next_index ].name_index = f->name_index;
+	dir->next_index++;
+
+	bs_drive->next_free = bs_drive->next_free + sizeof( afs_file );
+	
+	memcpy( (drive_buff + bs_drive->next_free), file_buff, size );
+
+	bs_drive->next_free = bs_drive->next_free + f->file_size + 1024;
+
+	return true;
+}
+
+afs_block_directory* bootstrap_mkdir( uint8_t *drive_buff, afs_block_directory *parent, char *name ) {
+	afs_block_directory *d = (afs_block_directory *)(drive_buff + bs_drive->next_free);
+	d->name_index = bootstrap_add_name_to_string_table( name );
+	d->next_index = 0;
+	d->type = AFS_BLOCK_TYPE_DIRECTORY;
+
+
+	parent->index[ parent->next_index ].name_index = d->name_index;
+	parent->index[ parent->next_index ].start = bs_drive->next_free;
+	parent->next_index++;
+
+	bs_drive->next_free = bs_drive->next_free + sizeof( afs_block_directory );
+
+	return d;
+}
+
+/**
+ * @brief Copy a file into the given directory
+ * 
+ * @param name_old File name (including path) of the file to copy into the structure
+ * @param name_new New file name to use
+ * @param drive_buff Pointer to the buffer containing the dirve
+ * @param dir Pointer to the directory to add the file to
+ * 
+ * @return true Copying the file was successful
+ * @return false Copying the file failed
+ */
+bool bootstrap_cp( char *name_old, char *name_new, uint8_t *drive_buff, afs_block_directory *dir ) {
+	FILE *fp = fopen( name_old, "r" );
+
+	struct stat sta;
+	stat( name_old, &sta );
+	uint32_t file_size = sta.st_size;
+
+	printf( "size: %d\n", file_size );
+
+	uint8_t * buff = malloc( file_size );
+
+	uint32_t read_size = fread( buff, file_size, 1, fp );
+	printf( "read_size: %d\n", read_size );
+
+	bootstrap_add_file( drive_buff, dir, buff, file_size, name_new );
+
+	fclose( fp );
+}
+
+/**
+ * @brief Add name to the string table
+ * 
+ * @param name Text string to add
+ * 
+ * @return uint32_t Index that the name was added at
+ */
+uint32_t bootstrap_add_name_to_string_table( char * name ) {
+	strcpy( bs_string_table->string[ bs_string_table->next_free ], name );
+	bs_string_table->next_free++;
+
+	return bs_string_table->next_free - 1;
+}

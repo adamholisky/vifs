@@ -43,7 +43,7 @@ typedef struct {
 int rfs_initalize( void );
 rfs_file *rfs_lookup_by_inode_id( inode_id id );
 int rfs_open( inode_id id );
-int rfs_mount( inode_id id, uint8_t *data_root );
+int rfs_mount( inode_id id, char *path, uint8_t *data_root );
 int rfs_create( inode_id parent, uint8_t type, char *path, char *name );
 int rfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int rfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );

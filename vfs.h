@@ -19,6 +19,7 @@ extern "C"
 	#define vfs_realloc realloc
 	#define vfs_panic printf
 	#define vfs_debugf printf
+	#define vfs_disk_read vfs_disk_read_test
 #else
 	#include <kernel_common.h>
 
@@ -95,7 +96,7 @@ typedef struct {
 	int (*create)( inode_id, uint8_t, char *, char * );
 	int (*read)( inode_id, uint8_t *, uint64_t, uint64_t );
 	int (*write)( inode_id, uint8_t *, uint64_t, uint64_t );
-	int (*mount)( inode_id, uint8_t * );
+	int (*mount)( inode_id, char *, uint8_t * );
 	vfs_directory_list * (*get_dir_list)( inode_id, vfs_directory_list * );
 	int (*open)( inode_id );
 	void (*close)( inode_id );
@@ -130,10 +131,15 @@ vfs_inode *vfs_allocate_inode( void );
 vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list );
 inode_id vfs_get_from_dir( inode_id id, char *name );
 
+#ifdef VIFS_DEV
+void vfs_test_ramfs( void );
+void vfs_test_afs( void );
+uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size );
+void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
-
+#endif
 
 #ifdef __cplusplus
 }
