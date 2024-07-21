@@ -35,6 +35,10 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 #ifdef VIFS_DEV
 
 int main( int argc, char *argv[] ) {
+	char hello_data[] = "Hello, world!";
+	char hello_data_b[] = "Another testing file.\nMulti-line?\nWooho!\n";
+	char proc_build_num[] = "1984";
+	char proc_magic[] = "NCC-1701-D";
 
 	int vfs_init_err = vfs_initalize();
 	if( vfs_init_err != 0 ) {
@@ -63,27 +67,82 @@ int main( int argc, char *argv[] ) {
 
 	vfs_debugf( "Mounted root.\n" );
 
-	int create_err = vfs_create( VFS_INODE_TYPE_FILE, "/", "test.txt" );
-	if( create_err < 0 ) {
-		vfs_panic( "Could not create test.txt\n" );
+	vfs_test_create_file( "/", "test.txt", hello_data, sizeof(hello_data) );
+	vfs_test_create_file( "/", "test_2.txt", hello_data_b, sizeof(hello_data_b) );
+	vfs_test_create_dir( "/", "proc" );
+	vfs_test_create_dir( "/proc", "build" );
+	vfs_test_create_file( "/proc", "magic", proc_magic, sizeof(proc_magic) );
+	vfs_test_create_file( "/proc/build", "number", proc_build_num, sizeof(proc_build_num) );
+
+	vfs_test_ls( "/" );
+	vfs_test_ls( "/proc" );
+	vfs_test_ls( "/proc/build" );
+	
+	vfs_test_cat( "/proc/magic" );
+	vfs_test_cat( "/proc/build/number" );
+	
+	return 0;
+}
+
+void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size ) {
+	int file_inode = vfs_create( VFS_INODE_TYPE_FILE, path, name );
+	if( file_inode < 0 ) {
+		vfs_panic( "Could not create %s\n", name );
 	}
 
-	vfs_debugf( "Created inode %d\n", create_err );
-
-	int write_err = vfs_write( 2, "Hello, world!", sizeof("Hello, world!"), 0 );
+	int write_err = vfs_write( file_inode, data, size, 0 );
 	if( write_err < 0 ) {
 		vfs_panic( "Error when writing.\n" );
 	}
+}
 
-	char *data = vfs_malloc( sizeof("Hello, world!") );
-	int read_err = vfs_read( 2, data, sizeof("Hello, world!"), 0 );
+void vfs_test_create_dir( char *path, char *name ) {
+	int file_inode = vfs_mkdir( vfs_lookup_inode(path), path, name );
+	if( file_inode < 0 ) {
+		vfs_panic( "Could not create %s\n", name );
+	}
+}
+
+void vfs_test_ls( char *path ) {
+	char type_dir[] = "DIR ";
+	char type_file[] = "FILE";
+	char type_unknown[] = "????";
+
+	vfs_debugf( "Listing: %s\n", path );
+	vfs_directory_list *dir_list = vfs_malloc( sizeof(vfs_directory_list) );
+	vfs_get_directory_list( vfs_lookup_inode(path), dir_list );
+
+	for( int i = 0; i < dir_list->count; i++ ) {
+		char *type = NULL;
+
+		vfs_inode *n = vfs_lookup_inode_ptr_by_id( dir_list->entry[i].id );
+		switch( n->type ) {
+			case VFS_INODE_TYPE_DIR:
+				type = type_dir;
+				break;
+			case VFS_INODE_TYPE_FILE:
+				type = type_file;
+				break;
+			default:
+				type = type_unknown;
+		}
+
+		vfs_debugf( "    %03ld %s %s\n", dir_list->entry[i].id, type, dir_list->entry[i].name );
+	}
+
+	vfs_debugf( "\n" );
+}
+
+void vfs_test_cat( char *pathname ) {
+	char *data = vfs_malloc( 1024 );
+	int read_err = vfs_read( vfs_lookup_inode(pathname), data, 1024, 0 );
 	if( read_err < 0 ) {
 		vfs_panic( "Error when reading.\n" );
 	}
 
-	vfs_debugf( "Data read: \"%s\"\n", data );
-
-	return 0;
+	vfs_debugf( "cat %s\n", pathname );
+	vfs_debugf( "%s\n", data );
+	vfs_debugf( "\n" );
 }
 
 #endif
@@ -98,7 +157,7 @@ vfs_inode *inode_index_tail;
 inode_id vfs_inode_id_top;
 
 /**
- * @brief 
+ * @brief Initalizes the VFS
  * 
  * @return int 
  */
@@ -109,6 +168,9 @@ int vfs_initalize( void ) {
 	root_inode.type = VFS_INODE_TYPE_DIR;
 	root_inode.id = 1;
 	root_inode.is_mount_point = false;
+	root_inode.dir_inodes = vfs_malloc( sizeof(vfs_directory) );
+	root_inode.dir_inodes->id = 0;
+	root_inode.dir_inodes->next_dir = NULL;
 
 	inode_index_tail = &root_inode;
 
@@ -118,7 +180,7 @@ int vfs_initalize( void ) {
 }
 
 /**
- * @brief 
+ * @brief Registers a file system for use
  * 
  * @param fs 
  * @return int 
@@ -142,7 +204,7 @@ vfs_filesystem *vfs_register_fs( vfs_filesystem *fs ) {
 }
 
 /**
- * @brief 
+ * @brief Returns the file system object of the given type
  * 
  * @param fs_type 
  * @return vfs_filesystem* 
@@ -170,7 +232,7 @@ vfs_filesystem *vfs_get_fs( uint8_t fs_type ) {
 }
 
 /**
- * @brief 
+ * @brief Mounts a file system at the given location
  * 
  * @param fs_type 
  * @param data 
@@ -212,8 +274,8 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
  * @param path 
  * @return inode_id 
  */
-inode_id vfs_lookup_inode( char *path ) {
-	vfs_inode *node = vfs_lookup_inode_ptr( path );
+inode_id vfs_lookup_inode( char *pathname ) {
+	vfs_inode *node = vfs_lookup_inode_ptr( pathname );
 
 	if( node != NULL ) {
 		return node->id;
@@ -248,23 +310,70 @@ vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id ) {
 /**
  * @brief Returns a vfs_inode object represented by path
  * 
- * @param path 
+ * @param pathname ABSOLUTE path to look up
  * @return vfs_inode* 
  */
-vfs_inode *vfs_lookup_inode_ptr( char *path ) {
+vfs_inode *vfs_lookup_inode_ptr( char *pathname ) {
 	vfs_inode *ret_val = NULL;
+	uint32_t path_length = strlen( pathname );
 
-	if( strcmp( path, "/" ) == 0 ) {
+	if( strcmp( pathname, "/" ) == 0 ) {
 		return &root_inode;
 	}
 
-	// TODO... (lol)
+	// Break up path by seperator
+	// Test each element in turn
+	// Return last element
+	
+	bool keep_going = true;
+	inode_id parent_inode_id = 0;
+	char *c = pathname;
+	int element_index = 0;
+	int path_index = 0;
+	char name[VFS_NAME_MAX];
+	memset( name, 0, VFS_NAME_MAX );
+
+	do {	
+		if( *c != '/' && *c != 0 ) {
+			// build the element
+
+			name[element_index] = *c;
+			element_index++;
+		} else {
+			// done building the element, check for it
+			//vfs_debugf( "Element: \"%s\"\n", name );
+
+			if( element_index == 0 ) {
+				parent_inode_id = 1;
+				// ignore root dir
+			} else {
+				parent_inode_id = vfs_get_from_dir( parent_inode_id, name );
+				if( parent_inode_id != 0 ) {
+					// do it again
+					memset( name, 0, VFS_NAME_MAX );
+					element_index = 0;
+				} else {
+					// coudln't find it, fail overall
+					return NULL;
+				}
+			}
+		}
+
+		c++;
+		path_index++;
+
+		if( path_index > path_length ) {
+			keep_going = false;
+		}
+	} while( keep_going );
+	
+	ret_val = vfs_lookup_inode_ptr_by_id( parent_inode_id );
 
 	return ret_val;
 }
 
 /**
- * @brief 
+ * @brief Create a new inode for use
  * 
  * @return vfs_inode* 
  */
@@ -321,7 +430,7 @@ int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
 
 	if( node == NULL ) {
-		vfs_debugf( "inode ID %d not found, aborting write.\n", id );
+		vfs_debugf( "inode ID %ld not found, aborting write.\n", id );
 		return -1;
 	}
 
@@ -343,11 +452,68 @@ int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
 
 	if( node == NULL ) {
-		vfs_debugf( "inode ID %d not found, aborting read.\n", id );
+		vfs_debugf( "inode ID %ld not found, aborting read.\n", id );
 		return -1;
 	}
 
 	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
 
 	return fs->op.read( id, data, size, offset );
+}
+
+/**
+ * @brief Creates a diretory
+ * 
+ * @param parent 
+ * @param path 
+ * @param name 
+ * @return int 
+ */
+int vfs_mkdir( inode_id parent, char *path, char *name ) {
+	return vfs_create( VFS_INODE_TYPE_DIR, path, name );
+}
+
+/**
+ * @brief Returns each file in the provided directory
+ * 
+ * @param id 
+ * @param list 
+ * @return vfs_directory_list* 
+ */
+vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list ) {
+	vfs_inode *dir = vfs_lookup_inode_ptr_by_id( id );
+
+	if( dir == NULL ) {
+		vfs_debugf( "could not find inode %ld for directory listing.\n", id );
+		return NULL;
+	}
+
+	if( dir->type != VFS_INODE_TYPE_DIR ) {
+		vfs_debugf( "indoe ID %ld is not a directory.\n", id );
+		return NULL;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( dir->fs_type );
+
+	return fs->op.get_dir_list( id, list );
+}
+
+/**
+ * @brief Gets the inode id of file name from the parent dir
+ * 
+ * @param parent_id parent inode id
+ * @param name name of the file 
+ * @return inode_id id of the found file, or 0 if failed
+ */
+inode_id vfs_get_from_dir( inode_id id, char *name ) {
+	vfs_directory_list list;
+	vfs_get_directory_list( id, &list );
+
+	for( int i = 0; i < list.count; i++ ) {
+		if( strcmp(list.entry[i].name, name ) == 0 ) {
+			return list.entry[i].id;
+		}
+	}
+
+	return 0;
 }

@@ -24,6 +24,7 @@ int rfs_initalize( void ) {
 	rfs->op.create = rfs_create;
 	rfs->op.write = rfs_write;
 	rfs->op.read = rfs_read;
+	rfs->op.get_dir_list = rfs_dir_list;
 
 	rfs_files.head = NULL;
 	rfs_files.tail = NULL;
@@ -58,6 +59,7 @@ int rfs_mount( inode_id id, uint8_t *data_root ) {
 	rfs_files.head->file->rfs_file_type = RFS_FILE_TYPE_DIR;
 	rfs_files.head->file->vfs_inode_id = id;
 	rfs_files.head->file->vfs_parent_inode_id = 0;
+	strcpy( rfs_files.head->file->name, "/" );
 
 	rfs_file_list *root_dir_list = vfs_malloc( sizeof(rfs_file_list) );
 	root_dir_list->head = NULL;
@@ -77,7 +79,7 @@ int rfs_mount( inode_id id, uint8_t *data_root ) {
  * @param name 
  * @return int 
  */
-int rfs_create( uint8_t type, inode_id parent, char *path, char *name ) {
+int rfs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 	// Allocate a VFS inode for this object, fill in details
 	vfs_inode *node = vfs_allocate_inode();
 	node->fs_type = FS_TYPE_RFS;
@@ -88,6 +90,7 @@ int rfs_create( uint8_t type, inode_id parent, char *path, char *name ) {
 	f->vfs_inode_id = node->id;
 	f->size = 0;
 	f->vfs_parent_inode_id = parent;
+	strcpy( f->name, name );
 
 	switch( type ) {
 		case VFS_INODE_TYPE_DIR:
@@ -114,15 +117,16 @@ int rfs_create( uint8_t type, inode_id parent, char *path, char *name ) {
 	rfs_file_list *parent_dir = (rfs_file_list *)rfs_parent->dir_list;
 	rfs_file_list_el *list_el = vfs_malloc( sizeof(rfs_file_list_el) );
 	list_el->next = NULL;
+	list_el->file = f;
 
 	if( parent_dir->head == NULL ) {
 		parent_dir->head = list_el;
 		parent_dir->tail = list_el;
-		parent_dir->count++;
 	} else {
 		parent_dir->tail->next = list_el;
 		parent_dir->tail = list_el;
 	}
+	parent_dir->count++;
 
 	// Attach completed file to the master list
 	rfs_file_list_el *main_file_list_el = vfs_malloc( sizeof(rfs_file_list_el) );
@@ -231,4 +235,44 @@ int rfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	memcpy( data + (uint8_t)offset, f->data, size );
 
 	return size;
+}
+
+/**
+ * @brief Returns a list of files in the given directory
+ * 
+ * @param id 
+ * @param list 
+ * @return vfs_directory_list* 
+ */
+vfs_directory_list *rfs_dir_list( inode_id id, vfs_directory_list *list ) {
+	rfs_file *dir = rfs_lookup_by_inode_id( id );
+
+	if( dir == NULL ) {
+		vfs_debugf( "rfs_file not found.\n" );
+		return NULL;
+	}
+
+	if( dir->rfs_file_type != RFS_FILE_TYPE_DIR ) {
+		vfs_debugf( "rfs_file is not a direcotry.\n" );
+		return NULL;
+	}
+
+	if( dir->dir_list == NULL ) {
+		vfs_debugf( "dir_list in rfs_file is NULL for id %ld.\n", id );
+		return NULL;
+	}
+
+	rfs_file_list *rfs_list = (rfs_file_list *)dir->dir_list;
+
+	list->count = rfs_list->count;
+	list->entry = vfs_malloc( sizeof(vfs_directory_item) * list->count );
+
+	rfs_file_list_el *head = rfs_list->head;
+
+	for( int i = 0; i < list->count; i++ ) {
+		strcpy( list->entry[i].name, head->file->name );
+		list->entry[i].id = head->file->vfs_inode_id;
+
+		head = head->next;
+	}
 }
