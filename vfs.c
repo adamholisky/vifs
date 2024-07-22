@@ -71,7 +71,7 @@ int main( int argc, char *argv[] ) {
 	uint64_t size = ftell( fp );
 	rewind( fp );
 	
-	vfs_debugf( "AFS drive size: %ld\n", size );
+	//vfs_debugf( "AFS drive size: %ld\n", size );
 
 	afs_bootstrap( fp, size );
 
