@@ -30,11 +30,14 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 
 	afs = vfs_register_fs( afs );
 
+	afs->type = FS_TYPE_AFS;
 	afs->op.mount = afs_mount;
 	afs->op.get_dir_list = afs_dir_list;
 
 	afs_data_root = data_root;
 	drive_size = drive_size_in_bytes;
+
+	afs_inodes_tail = &afs_inodes;
 
 	return 0;
 }
@@ -76,6 +79,7 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
 	afs_root_dir = (afs_block_directory *)afs_read_block(drive->root_directory, sizeof(afs_block_directory), (uint8_t *)afs_root_dir);
 
 	uint32_t length_of_block_meta = drive->block_count * sizeof(afs_block_meta_data);
+	block_meta_data = vfs_malloc( length_of_block_meta );
 	block_meta_data = (afs_block_meta_data *)vfs_disk_read( 1, sizeof(afs_drive), length_of_block_meta, (uint8_t *)block_meta_data );
 
 	afs_load_directory_as_inodes( id, afs_root_dir );
@@ -92,7 +96,8 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
  */
 int afs_load_directory_as_inodes( inode_id parent_inode, afs_block_directory *dir ) {
 	for( int i = 0; i < dir->next_index; i++ ) {
-		afs_load_block_as_inode( &block_meta_data[dir->next_index] );
+		vfs_debugf( "load dir: index=%d\n", dir->index[i] );
+		afs_load_block_as_inode( &block_meta_data[dir->index[i]] );
 	}
 
 	return 0;
@@ -157,6 +162,8 @@ inode_id afs_find_inode_from_block_id( uint32_t block_id ) {
 		}
 	} while( head != NULL && !found );
 
+	vfs_debugf( "Returning vfs_id: %d\n", head->vfs_id );
+
 	return ret_val;
 }
 
@@ -188,9 +195,13 @@ vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list ) {
 	list->count = dir_block->next_index;
 	list->entry = vfs_malloc( sizeof(vfs_directory_item) * list->count );
 
+	vfs_debugf( "count: %d\n", list->count );
+
 	for( int i = 0; i < list->count; i++ ) {
 		strcpy( list->entry[i].name, block_meta_data[dir_block->index[i]].name );
 		list->entry[i].id = afs_find_inode_from_block_id( block_meta_data[dir_block->index[i]].id );
+
+		vfs_debugf( "i %d: name=\"%s\" id=%d\n", i, list->entry[i].name, list->entry[i].id );
 	}
 
 	return list;
@@ -209,9 +220,9 @@ afs_inode *afs_lookup_by_inode_id( inode_id id ) {
 	do {
 		if( inode->vfs_id == id ) {
 			found = true;
+		} else {
+			inode = inode->next;
 		}
-
-		inode = inode->next;
 	} while( (inode != NULL) && !found );
 
 	if( !found ) {
@@ -221,3 +232,77 @@ afs_inode *afs_lookup_by_inode_id( inode_id id ) {
 	return inode;
 }
 
+void afs_bootstrap( FILE *fp, uint64_t size ) {
+	afs_drive bs_drive;
+
+	bs_drive.size = size;
+	bs_drive.block_size = AFS_DEFAULT_BLOCK_SIZE;
+	bs_drive.block_count = bs_drive.size / bs_drive.block_size;
+	bs_drive.magic[0] = 'A';
+	bs_drive.magic[1] = 'F';
+	bs_drive.magic[2] = 'S';
+	bs_drive.magic[3] = ' ';
+	bs_drive.version = 2;
+
+	// Calculate the number of meta data blocks
+	uint64_t meta_size_in_bytes = sizeof(afs_block_meta_data) * bs_drive.block_count;
+	uint64_t meta_blocks = meta_size_in_bytes / bs_drive.block_size;
+	meta_blocks++;
+	vfs_debugf( "Block count: %ld\n", bs_drive.block_count );
+	vfs_debugf( "Meta blocks: %ld\n", meta_blocks );
+
+	bs_drive.root_directory = meta_blocks + 1;
+	bs_drive.next_free = meta_blocks + 3; // +2 would be for the first file
+
+	// Setup root directory
+	afs_block_directory root_dir;
+	root_dir.type = AFS_BLOCK_TYPE_DIRECTORY;
+	root_dir.index[0] = meta_blocks + 2;
+	root_dir.next_index = 1;
+
+	// Write the drive header
+	afs_bootstrap_write( fp, (void *)&bs_drive, sizeof(afs_drive) );
+
+	// Write the meta data
+	for( int i = 0; i < bs_drive.block_count; i++ ) {
+		afs_block_meta_data bs_meta;
+		memset( &bs_meta, 0, sizeof(afs_block_meta_data) );
+		bs_meta.id = i;
+		
+		if( i == 0 ) {
+			bs_meta.block_type = AFS_BLOCK_TYPE_SYSTEM;
+			bs_meta.in_use = true;
+		} else if( i <= meta_blocks ) {
+			bs_meta.block_type = AFS_BLOCK_TYPE_META;
+			bs_meta.in_use = true;
+		} else if( i == meta_blocks + 1 ) {
+			bs_meta.block_type = AFS_BLOCK_TYPE_DIRECTORY;
+			bs_meta.in_use = true;
+			strcpy( bs_meta.name, "/" );
+		} else if( i == meta_blocks + 2 ) {
+			bs_meta.block_type = AFS_BLOCK_TYPE_FILE;
+			bs_meta.in_use = true;
+			strcpy( bs_meta.name, "magic" );
+		} else {
+			bs_meta.block_type = AFS_BLOCK_TYPE_NOT_SET;
+			bs_meta.in_use = false;
+		}
+
+		afs_bootstrap_write( fp, (void *)&bs_meta, sizeof(afs_block_meta_data) );
+	}
+
+	// Write the root directory
+	fseek( fp, bs_drive.root_directory * bs_drive.block_size, SEEK_SET );
+	afs_bootstrap_write( fp, (void *)&root_dir, sizeof(afs_block_directory) );
+}
+
+bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size ) {
+	uint64_t result = fwrite( data, size, 1, fp );
+
+	if( result != 1 ) {
+		vfs_debugf( "fwrite failed!\n" );
+		return false;
+	}
+
+	return true;
+}

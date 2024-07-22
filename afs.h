@@ -13,10 +13,15 @@ extern "C"
 /* 
 
 Disk layout
+--------------
 
 0		Drive header (afs_drive)
+x		Block meta data
+n		Free blocks
 
-
+Where:
+x = sizeof(afs_drive);
+n = sizeof(afs_drive) + (sizeof(afs_block_meta_data) * afs_drive.block_count)
 
 Block Calculation
 
@@ -39,6 +44,8 @@ Block Calculation
 #define AFS_BLOCK_TYPE_FILE 1
 #define AFS_BLOCK_TYPE_DIRECTORY 2
 #define AFS_BLOCK_TYPE_META 3
+#define AFS_BLOCK_TYPE_SYSTEM 4
+#define AFS_BLOCK_TYPE_NOT_SET 5
 
 typedef struct {
 	char		magic[4];		// "AFS "
@@ -111,6 +118,9 @@ inode_id afs_find_inode_from_block_id( uint32_t block_id );
 afs_inode *afs_lookup_by_inode_id( inode_id id );
 
 #ifdef VIFS_DEV
+
+void afs_bootstrap( FILE *fp, uint64_t size );
+bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size );
 
 #endif
 

@@ -34,6 +34,7 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 */
 
 #ifdef VIFS_DEV
+FILE *fp;
 
 int main( int argc, char *argv[] ) {
 	int vfs_init_err = vfs_initalize();
@@ -65,13 +66,20 @@ int main( int argc, char *argv[] ) {
 
 	vfs_test_create_dir( "/", "afs" );
 
-	FILE *fp = fopen( "afs.img", "r+" );
+	fp = fopen( "afs.img", "r+" );
 	fseek( fp, 0, SEEK_END );
 	uint64_t size = ftell( fp );
 	rewind( fp );
+	
+	vfs_debugf( "AFS drive size: %ld\n", size );
+
+	afs_bootstrap( fp, size );
+
+	vfs_debugf( "AFS bootstrapping done.\n" );
 
 	uint8_t *drive_data = vfs_malloc( size );
-	
+
+	rewind( fp );
 	uint64_t bytes_read = fread( drive_data, size, 1, fp );
 
 	if( bytes_read != 1 ) {
@@ -86,13 +94,17 @@ int main( int argc, char *argv[] ) {
 
 		return 1;
 	}
+
+	vfs_debugf( "AFS initalizing done.\n" );
 	
-	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs.img" );
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs" );
 	if( afs_mount_err != 0 ) {
 		vfs_panic( "Could not mount afs drive.\n" );
 
 		return 1;
 	}
+
+	vfs_debugf( "Mounted /afs.\n" );
 
 	vfs_test_afs();
 	
@@ -100,7 +112,7 @@ int main( int argc, char *argv[] ) {
 }
 
 void vfs_test_afs( void ) {
-	
+	vfs_test_ls( "/afs" );
 }
 
 void vfs_test_ramfs( void ) {
@@ -218,7 +230,15 @@ void vfs_test_cat( char *pathname ) {
  * @param length 
  */
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	fseek( fp, offset, SEEK_SET );
+	
+	int read_err = fread( data, length, 1, fp );
 
+	if( read_err != 1 ) {
+		vfs_debugf( "vfs_disk_read_test: fread failed.\n" );
+	}
+
+	return data;
 }
 
 #endif
@@ -273,7 +293,7 @@ vfs_filesystem *vfs_register_fs( vfs_filesystem *fs ) {
 			root = root->next_fs;
 		}
 
-		root->next_fs = fs;
+		root->next_fs = (void *)fs;
 	}
 
 	return fs;
@@ -299,7 +319,7 @@ vfs_filesystem *vfs_get_fs( uint8_t fs_type ) {
 			return fs;
 		}
 
-		fs->next_fs;
+		fs = (vfs_filesystem *)fs->next_fs;
 	}
 
 	vfs_panic( "Could not locate file system type: %d\n", fs_type );

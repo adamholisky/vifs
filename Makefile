@@ -23,3 +23,5 @@ rfs.o: rfs.c rfs.h vfs.h
 clean:
 	rm -f vifs
 	rm -f *.o
+
+#  dd if=/dev/zero of=./afs.img bs=4k iflag=fullblock,count_bytes count=200M
