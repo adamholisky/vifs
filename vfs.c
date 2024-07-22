@@ -74,7 +74,7 @@ int main( int argc, char *argv[] ) {
 	
 	uint64_t bytes_read = fread( drive_data, size, 1, fp );
 
-	if( bytes_read != size ) {
+	if( bytes_read != 1 ) {
 		vfs_panic( "Bytes read failed. Got %ld, expected %ld.\n", bytes_read, size );
 
 		return 1;
