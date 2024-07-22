@@ -50,7 +50,7 @@ int rfs_open( inode_id id ) {
  * @param data_root 
  * @return int 
  */
-int rfs_mount( inode_id id, uint8_t *data_root ) {
+int rfs_mount( inode_id id, char *path, uint8_t *data_root ) {
 	rfs_files.count = 1;
 	rfs_files.head = vfs_malloc( sizeof(rfs_file_list_el) );
 	rfs_files.tail = rfs_files.head;

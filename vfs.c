@@ -80,14 +80,14 @@ int main( int argc, char *argv[] ) {
 		return 1;
 	}
 	
-	int afs_init_err = afs_initalize();
+	int afs_init_err = afs_initalize( size, drive_data );
 	if( afs_init_err != 0 ) {
 		vfs_panic( "AFS initalization failed.\n" );
 
 		return 1;
 	}
 	
-	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs" );
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs.img" );
 	if( afs_mount_err != 0 ) {
 		vfs_panic( "Could not mount afs drive.\n" );
 

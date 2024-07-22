@@ -32,7 +32,7 @@ extern "C"
 typedef uint64_t inode_id;
 
 #define VFS_VERSION 2
-#define VFS_NAME_MAX 64
+#define VFS_NAME_MAX 50
 
 #define FS_TYPE_RFS 0
 #define FS_TYPE_AFS 1

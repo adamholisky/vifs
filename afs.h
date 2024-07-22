@@ -10,104 +10,105 @@ extern "C"
 #include <stdbool.h>
 #include "vfs.h"
 
-	/*
-		Drive Byte          Data
-		------------------------------------------------------------
-		0                   afs_drive
-		[index 0]           afs_block_directory for /
-		[index ]
+/* 
+
+Disk layout
+
+0		Drive header (afs_drive)
 
 
-	*/
+
+Block Calculation
+
+1 GiB drive
+	1073741824 bytes
+	4096 bytes/block
+	262,144 blocks
+	14417920 bytes of block meta data
+
+*/
+
+
 
 #define AFS_VERSION_1 2
+
+#define AFS_DEFAULT_BLOCK_SIZE 4096
+#define AFS_MAX_NAME_SIZE 50
 
 #define AFS_BLOCK_TYPE_UNKNOWN 0
 #define AFS_BLOCK_TYPE_FILE 1
 #define AFS_BLOCK_TYPE_DIRECTORY 2
-
-#define MAX_FD 20
-
-typedef struct {
-	uint32_t	start;			// starting byte of the item
-	uint32_t	name_index;		// string table index
-} afs_index;
+#define AFS_BLOCK_TYPE_META 3
 
 typedef struct {
-	uint32_t	next_free;		// next free string table name
-	char		string[50][50];
-} afs_string_table;
-
-typedef struct {	
-	uint32_t 	version;		// version of the drive struct
-	uint32_t 	size;			// overall size of the drive, in bytes
-	uint32_t	name_index;		// string table index
-	uint32_t	root_directory;	// starting byte of the dir struct for root
-	uint32_t	next_free;		// next free byte
+	char		magic[4];		// "AFS "
+	uint8_t 	version;		// version of the drive struct
+	uint64_t 	size;			// overall size of the drive, in bytes
+	uint32_t	block_size;		// Size of blocks
+	uint32_t	block_count;	// Number of blocks in the dirve
+	uint32_t	root_directory;	// starting block of the dir struct for root
+	uint32_t	next_free;		// next free block
+	uint32_t	reserved_1;
+	uint32_t	reserved_2;
+	uint32_t	reserved_3;
+	uint32_t	reserved_4;
+	uint32_t	reserved_5;
+	uint32_t	reserved_6;
+	uint32_t	reserved_7;
+	uint32_t	reserved_8;
 } afs_drive;
 
 typedef struct {
-	uint8_t 	type;			// Type of the block
-	uint8_t		padding[100];
+	uint32_t	id;				// unique block id (aka: inode)
+	uint8_t		block_type;		// type of data the block holds
+	char		name[AFS_MAX_NAME_SIZE];		// name
+	bool		in_use;
+} afs_block_meta_data;
+
+typedef struct {
+	uint8_t		data[AFS_DEFAULT_BLOCK_SIZE];
 } afs_generic_block;
 
 typedef struct {
 	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_FILE
-	uint32_t 	block_size;		// size of the block
 	uint32_t	file_size;		// size of the actual file data
-	uint32_t	name_index;		// string table index
+	uint32_t	reserved_1;
+	uint32_t	reserved_2;
+	uint32_t	reserved_3;
+	uint32_t	reserved_4;
+	uint32_t	reserved_5;
+	uint32_t	reserved_6;
+	uint32_t	reserved_7;
+	uint32_t	reserved_8;
 } afs_file;
 
 typedef struct {
 	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_DIRECTORY
-    uint32_t	name_index;		// string table index
-	afs_index	index[256];		// Block index for things in this directory
+	uint32_t	index[256];		// Block index for things in this directory
 	uint32_t	next_index;		// next index free
+	uint32_t	reserved_1;
+	uint32_t	reserved_2;
+	uint32_t	reserved_3;
+	uint32_t	reserved_4;
+	uint32_t	reserved_5;
+	uint32_t	reserved_6;
+	uint32_t	reserved_7;
+	uint32_t	reserved_8;
 } afs_block_directory;
 
 typedef struct {
-    inode_id id;
-    uint8_t type;
-    uint32_t block_offset;
-    char name[ VFS_NAME_MAX ];
-    void *next;
+	inode_id vfs_id;
+	uint32_t block_id;
+	void *next;
 } afs_inode;
 
-typedef struct {
-	uint32_t	fd;
-	uint8_t		*base;
-	uint32_t	size;
-	uint32_t	position;
-	char		*name;
-	bool		dirty;
-} vv_file;
-
-typedef struct {
-	vv_file		fd[MAX_FD];
-	char		working_directory[128];
-	afs_drive *	drive;
-	afs_block_directory * root_dir;
-	afs_string_table * string_table;
-	uint32_t	next_fd;
-} vv_file_internal;
-
-int afs_initalize( void );
+int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root );
 int afs_mount( inode_id id, char *path, uint8_t *data_root );
 int afs_load_directory_as_inodes( inode_id parent_inode, afs_block_directory *dir );
+int afs_load_block_as_inode( afs_block_meta_data *meta );
 vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list );
-
-uint32_t afs_get_file_location( vv_file_internal *fs, const char *filename );
-uint32_t afs_get_file_location_in_dir( vv_file_internal *fs, afs_block_directory *d, const char *filename );
-uint32_t afs_add_string(vv_file_internal *fs, char *name);
-void afs_ls(vv_file_internal *fs, char *path);
-afs_file *afs_get_file(vv_file_internal *fs, const char *filename);
-vv_file * afs_fopen( vv_file_internal *fs, const char * filename, const char * mode );
-uint32_t afs_exists( vv_file_internal *fs, const char * filename );
-uint32_t afs_fread( vv_file_internal *fs, void *ptr, uint32_t size, uint32_t nmemb, vv_file *fp );
-void afs_disply_diagnostic_data( uint8_t * buff );
-void dump_afs_file( vv_file_internal *fs, afs_file *f );
-uint32_t afs_exists_in_dir( vv_file_internal *fs, afs_block_directory *d, char *name );
-afs_generic_block* afs_get_generic_block( vv_file_internal *fs, char *filename );
+inode_id afs_find_inode_from_block_id( uint32_t block_id );
+afs_inode *afs_lookup_by_inode_id( inode_id id );
 
 #ifdef VIFS_DEV
 
