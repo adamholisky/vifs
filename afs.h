@@ -116,6 +116,13 @@ int afs_load_block_as_inode( afs_block_meta_data *meta );
 vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list );
 inode_id afs_find_inode_from_block_id( uint32_t block_id );
 afs_inode *afs_lookup_by_inode_id( inode_id id );
+int afs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+int afs_create( inode_id parent, uint8_t type, char *path, char *name );
+int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+uint8_t *afs_read_block( uint32_t block_id, uint64_t size, uint8_t *data );
+uint8_t *afs_write_block( uint32_t block_id, uint64_t size, uint8_t *data );
+int afs_write_meta( uint32_t block_id );
+int afs_write_directory( uint32_t block_id, afs_block_directory *dir );
 
 #ifdef VIFS_DEV
 

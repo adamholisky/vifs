@@ -112,7 +112,16 @@ int main( int argc, char *argv[] ) {
 }
 
 void vfs_test_afs( void ) {
+	char hello_data[] = "World of AFS!";
+
+	vfs_test_create_file( "/afs", "hello", hello_data, sizeof(hello_data) );
+	vfs_debugf( "done create.\n" );
+
 	vfs_test_ls( "/afs" );
+	vfs_debugf( "done ls.\n" );
+	
+	vfs_test_cat( "/afs/hello" );
+	vfs_debugf( "done cat.\n" );
 }
 
 void vfs_test_ramfs( void ) {
@@ -236,6 +245,27 @@ uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, u
 
 	if( read_err != 1 ) {
 		vfs_debugf( "vfs_disk_read_test: fread failed.\n" );
+	}
+
+	return data;
+}
+
+/**
+ * @brief Simulate a disk write
+ * 
+ * @param drive 
+ * @param offset 
+ * @param length 
+ * @param data 
+ * @return uint8_t* 
+ */
+uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	fseek( fp, offset, SEEK_SET );
+
+	int write_err = fwrite( data, length, 1, fp );
+
+	if( write_err != 1 ) {
+		vfs_debugf( "vfs_disk_write_test: fwrite failed.\n" );
 	}
 
 	return data;

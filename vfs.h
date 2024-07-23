@@ -20,6 +20,7 @@ extern "C"
 	#define vfs_panic printf
 	#define vfs_debugf printf
 	#define vfs_disk_read vfs_disk_read_test
+	#define vfs_disk_write vfs_disk_write_test
 #else
 	#include <kernel_common.h>
 
@@ -135,10 +136,13 @@ inode_id vfs_get_from_dir( inode_id id, char *name );
 void vfs_test_ramfs( void );
 void vfs_test_afs( void );
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size );
 void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
+
+
 #endif
 
 #ifdef __cplusplus

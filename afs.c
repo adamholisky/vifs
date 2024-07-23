@@ -33,6 +33,9 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 	afs->type = FS_TYPE_AFS;
 	afs->op.mount = afs_mount;
 	afs->op.get_dir_list = afs_dir_list;
+	afs->op.read = afs_read;
+	afs->op.write = afs_write;
+	afs->op.create = afs_create;
 
 	afs_data_root = data_root;
 	drive_size = drive_size_in_bytes;
@@ -51,12 +54,51 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
  * @return uint8_t* 
  */
 uint8_t *afs_read_block( uint32_t block_id, uint64_t size, uint8_t *data ) {
-	#ifdef VIFS_DEV
-		uint64_t offset = block_id * drive->block_size;
-		return (afs_data_root + offset);
-	#else
-		// OS code goes here
-	#endif
+	vfs_disk_read( 0, (block_id * drive->block_size), size, data );
+
+	return data;
+}
+
+/**
+ * @brief Write a block to disk
+ * 
+ * @param block_id 
+ * @param size 
+ * @param data 
+ * @return uint8_t* 
+ */
+uint8_t *afs_write_block( uint32_t block_id, uint64_t size, uint8_t *data ) {
+	uint64_t offset = block_id * drive->block_size;
+	vfs_disk_write( 0, offset, size, data );
+}
+
+/**
+ * @brief Writes meta data for block_id to disk
+ * 
+ * @param block_id 
+ * @return int 
+ */
+int afs_write_meta( uint32_t block_id ) {
+	uint64_t offset = sizeof(afs_drive);
+	offset = offset + (sizeof(afs_block_meta_data) * (block_id - 1));
+
+	vfs_disk_write( 0, offset, sizeof(afs_block_meta_data), (uint8_t *)&block_meta_data[block_id] );
+
+	return 1;
+}
+
+/**
+ * @brief Writes directory block at block_id to disk
+ * 
+ * @param block_id 
+ * @param dir 
+ * @return int 
+ */
+int afs_write_directory( uint32_t block_id, afs_block_directory *dir ) {
+	uint64_t offset = drive->block_size * (block_id - 1);
+	vfs_disk_write( 0, offset, sizeof(afs_block_directory), (uint8_t *)dir );
+
+	return 1;
 }
 
 /**
@@ -88,6 +130,119 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
 }
 
 /**
+ * @brief Reads the given afs file
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset 
+ * @return int 
+ */
+int afs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	afs_inode *inode = afs_lookup_by_inode_id( id );
+
+	vfs_disk_read( 0, offset, size, data );
+
+	return size;
+}
+
+/**
+ * @brief Create a file with the given parent
+ * 
+ * @param parent 
+ * @param type 
+ * @param path 
+ * @param name 
+ * @return int 
+ */
+int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
+	afs_inode *parent_inode = afs_lookup_by_inode_id( parent );
+
+	// Setup the inode
+	vfs_inode *vfs_inode_data = vfs_allocate_inode();
+	vfs_inode_data->fs_type = FS_TYPE_AFS;
+	vfs_inode_data->is_mount_point = false;
+	vfs_inode_data->type = type;
+	vfs_inode_data->next_inode = NULL;
+
+	vfs_debugf( "inode id: %d\n", vfs_inode_data->id );
+
+	afs_inodes_tail->next = vfs_malloc( sizeof(afs_inode) );
+	afs_inode *file_inode = (afs_inode *)afs_inodes_tail->next;
+	file_inode->next = NULL;
+	file_inode->vfs_id = vfs_inode_data->id;
+	file_inode->block_id = drive->next_free;
+	afs_inodes_tail = file_inode;
+
+	// Find an open block, fill in meta
+	uint32_t block_to_use = drive->next_free;
+	drive->next_free++;
+	block_meta_data[ block_to_use ].in_use = true;
+	strcpy( block_meta_data[ block_to_use ].name, name );
+	uint32_t afs_type = AFS_BLOCK_TYPE_UNKNOWN;
+
+	// Format the block
+	void *block_data = NULL;
+	uint32_t block_data_size = 0;
+	afs_block_directory dir;
+	afs_file file;
+
+	if( type == VFS_INODE_TYPE_DIR ) {
+		afs_type = AFS_BLOCK_TYPE_DIRECTORY;
+
+		memset( &dir, 0, sizeof(afs_block_directory) );
+		dir.next_index = 0;
+		dir.type = AFS_BLOCK_TYPE_DIRECTORY;
+
+		block_data = &dir;
+		block_data_size = sizeof(afs_block_directory);
+	} else if( type == VFS_INODE_TYPE_FILE ) {
+		afs_type = AFS_BLOCK_TYPE_FILE;
+
+		memset( &file, 0, sizeof(afs_file) );
+		file.file_size = 0;
+		file.type = AFS_BLOCK_TYPE_FILE;
+
+		block_data = &file;
+		block_data_size = sizeof(afs_file);
+	}
+
+	// Save the block type
+	block_meta_data[ block_to_use ].block_type = afs_type;
+
+	// Find directory, fill in index, increment next_index
+	afs_block_directory *parent_dir = vfs_malloc( sizeof(afs_block_directory) );
+	parent_dir = (afs_block_directory *)afs_read_block( parent_inode->block_id, sizeof(afs_block_directory), (uint8_t *)parent_dir );
+	parent_dir->index[parent_dir->next_index] = block_to_use;
+	parent_dir->next_index++;
+	
+	// Write everything to disk
+	afs_write_block( block_to_use, block_data_size, (uint8_t *)block_data );
+	afs_write_meta( block_to_use );
+	afs_write_directory( parent_inode->block_id, parent_dir );
+
+	return vfs_inode_data->id;
+}
+
+/**
+ * @brief Write to the given file
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset 
+ * @return int 
+ */
+int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	afs_inode *file = afs_lookup_by_inode_id( id );
+
+	afs_write_block( file->block_id, size, (data + offset) );
+
+	return 0;
+}
+
+
+/**
  * @brief Load everything in a directory as a vfs_inode, if it hasn't been done already
  * 
  * @param parent_inode 
@@ -117,7 +272,7 @@ int afs_load_block_as_inode( afs_block_meta_data *meta ) {
 	}
 
 	if( !afs_find_inode_from_block_id(meta->id) ) {
-		afs_inodes_tail->next = vfs_malloc( sizeof(afs_inodes) );
+		afs_inodes_tail->next = vfs_malloc( sizeof(afs_inode) );
 		afs_inodes_tail = afs_inodes_tail->next;
 		afs_inodes_tail->next = NULL;
 		
