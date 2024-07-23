@@ -187,7 +187,7 @@ int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 	vfs_inode_data->type = type;
 	vfs_inode_data->next_inode = NULL;
 
-	vfs_debugf( "inode id: %d\n", vfs_inode_data->id );
+	//vfs_debugf( "inode id: %d\n", vfs_inode_data->id );
 
 	afs_inodes_tail->next = vfs_malloc( sizeof(afs_inode) );
 	afs_inode *file_inode = (afs_inode *)afs_inodes_tail->next;
@@ -373,7 +373,7 @@ vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list ) {
 	list->count = dir_block->next_index;
 	list->entry = vfs_malloc( sizeof(vfs_directory_item) * list->count );
 
-	vfs_debugf( "count: %d\n", list->count );
+	//vfs_debugf( "count: %d\n", list->count );
 
 	for( int i = 0; i < list->count; i++ ) {
 		strcpy( list->entry[i].name, block_meta_data[dir_block->index[i]].name );

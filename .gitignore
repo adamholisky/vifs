@@ -1,3 +1,4 @@
-afs.o
+*.o
 vifs
 afs.img
+vifs
