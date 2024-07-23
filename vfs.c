@@ -114,6 +114,8 @@ int main( int argc, char *argv[] ) {
 void vfs_test_afs( void ) {
 	char hello_data[] = "World of AFS!";
 
+	afs_dump_diagnostic_data();
+
 	vfs_test_create_file( "/afs", "hello", hello_data, sizeof(hello_data) );
 	vfs_debugf( "done create.\n" );
 
@@ -122,6 +124,8 @@ void vfs_test_afs( void ) {
 	
 	vfs_test_cat( "/afs/hello" );
 	vfs_debugf( "done cat.\n" );
+
+	afs_dump_diagnostic_data();
 }
 
 void vfs_test_ramfs( void ) {
@@ -267,6 +271,8 @@ uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, 
 	if( write_err != 1 ) {
 		vfs_debugf( "vfs_disk_write_test: fwrite failed.\n" );
 	}
+
+	fflush(fp);
 
 	return data;
 }

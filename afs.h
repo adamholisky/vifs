@@ -123,6 +123,9 @@ uint8_t *afs_read_block( uint32_t block_id, uint64_t size, uint8_t *data );
 uint8_t *afs_write_block( uint32_t block_id, uint64_t size, uint8_t *data );
 int afs_write_meta( uint32_t block_id );
 int afs_write_directory( uint32_t block_id, afs_block_directory *dir );
+int afs_write_drive_info( afs_drive *drive_info );
+
+void afs_dump_diagnostic_data( void );
 
 #ifdef VIFS_DEV
 
