@@ -276,6 +276,10 @@ int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	// TODO: Current assumes we're writing immediately at the blocks right after the first one
 	if( block_meta_data[node->block_id].num_blocks != 1 ) {
 		for( int i = 1; i < block_meta_data[node->block_id].num_blocks; i++ ) {
+			block_meta_data[drive->next_free].block_type = AFS_BLOCK_TYPE_FILE;
+			block_meta_data[drive->next_free].in_use = true;
+			afs_write_meta( drive->next_free );
+			
 			drive->next_free++;
 		}
 	}
