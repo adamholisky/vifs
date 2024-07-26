@@ -38,6 +38,8 @@ fs_get_directory_inodes() returns list of inodes from the given directory (itsel
 FILE *fp;
 
 int main( int argc, char *argv[] ) {
+
+	// Initalize VFS
 	int vfs_init_err = vfs_initalize();
 	if( vfs_init_err != 0 ) {
 		vfs_panic( "VFS initalizatoin failed.\n" );
@@ -47,39 +49,18 @@ int main( int argc, char *argv[] ) {
 
 	vfs_debugf( "VFS Initalizing done.\n" );
 
-	int rfs_init_err = rfs_initalize();
-	if( rfs_init_err != 0 ) {
-		vfs_panic( "RFS initalization failed.\n" );
-
-		return 1;
-	}
-
-	vfs_debugf( "RFS initalizing done.\n" );
-
-	int mount_err = vfs_mount( FS_TYPE_RFS, NULL, "/" );
-	if( mount_err != 0 ) {
-		vfs_panic( "Could not mount root fs.\n" );
-
-		return 1;
-	}
-
-	vfs_debugf( "Mounted root.\n" );
-
-	vfs_test_create_dir( "/", "afs" );
-
+	// Open and size afs.img
 	fp = fopen( "afs.img", "r+" );
 	fseek( fp, 0, SEEK_END );
 	uint64_t size = ftell( fp );
 	rewind( fp );
 	
-	//vfs_debugf( "AFS drive size: %ld\n", size );
-
+	// Boostrap afs.img
 	afs_bootstrap( fp, size );
-
 	vfs_debugf( "AFS bootstrapping done.\n" );
 
+	// Read afs.img
 	uint8_t *drive_data = vfs_malloc( size );
-
 	rewind( fp );
 	uint64_t bytes_read = fread( drive_data, size, 1, fp );
 
@@ -89,23 +70,44 @@ int main( int argc, char *argv[] ) {
 		return 1;
 	}
 	
+	// Initalize AFS
 	int afs_init_err = afs_initalize( size, drive_data );
 	if( afs_init_err != 0 ) {
 		vfs_panic( "AFS initalization failed.\n" );
 
 		return 1;
 	}
-
 	vfs_debugf( "AFS initalizing done.\n" );
 	
-	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/afs" );
+	// Mount AFS
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/" );
 	if( afs_mount_err != 0 ) {
 		vfs_panic( "Could not mount afs drive.\n" );
 
 		return 1;
 	}
-
 	vfs_debugf( "Mounted /afs.\n" );
+
+	// Directory for RFS
+	vfs_mkdir( 1, "/", "proc" );
+
+	// Initalize RFS
+	int rfs_init_err = rfs_initalize();
+	if( rfs_init_err != 0 ) {
+		vfs_panic( "RFS initalization failed.\n" );
+
+		return 1;
+	}
+	vfs_debugf( "RFS initalizing done.\n" );
+
+	// Mount RFS
+	int mount_err = vfs_mount( FS_TYPE_RFS, NULL, "/proc" );
+	if( mount_err != 0 ) {
+		vfs_panic( "Could not mount root fs.\n" );
+
+		return 1;
+	}
+	vfs_debugf( "Mounted RFS.\n" );
 
 	vfs_test_ramfs();
 	vfs_test_afs();
@@ -116,32 +118,32 @@ int main( int argc, char *argv[] ) {
 void vfs_test_afs( void ) {
 	char hello_data[] = "World of AFS!";
 
-	vfs_test_create_file( "/afs", "hello", hello_data, sizeof(hello_data) );
-	vfs_test_create_dir( "/afs", "bin" );
-	vfs_test_create_dir( "/afs", "etc" );
-	vfs_test_create_dir( "/afs", "usr" );
-	vfs_test_create_dir( "/afs/usr", "share" );
-	vfs_test_create_dir( "/afs/usr/share", "fonts" );
-	vfs_test_create_dir( "/afs/usr/share", "test_data" );
+	vfs_test_create_file( "/", "hello", hello_data, sizeof(hello_data) );
+	vfs_test_create_dir( "/", "bin" );
+	vfs_test_create_dir( "/", "etc" );
+	vfs_test_create_dir( "/", "usr" );
+	vfs_test_create_dir( "/usr", "share" );
+	vfs_test_create_dir( "/usr/share", "fonts" );
+	vfs_test_create_dir( "/usr/share", "test_data" );
 
-	vfs_test_ls( "/afs" );
-	vfs_test_ls( "/afs/usr" );
-	vfs_test_ls( "/afs/usr/share" );
+	vfs_test_ls( "/" );
+	vfs_test_ls( "/usr" );
+	vfs_test_ls( "/usr/share" );
 	
-	vfs_test_cat( "/afs/hello" );
+	vfs_test_cat( "/hello" );
 	vfs_test_cp_real_file( 
 		"/usr/local/osdev/versions/vifs/afs_img_files/share/fonts/Gomme10x20n.bdf", 
-		"/afs/usr/share/fonts",
+		"/usr/share/fonts",
 		"Gomme10x20n.bdf"
 	);
 
 	vfs_test_cp_real_file( 
 		"/usr/local/osdev/versions/vifs/afs_img_files/share/test_data/picard_history.txt",
-		"/afs/usr/share/test_data",
+		"/usr/share/test_data",
 		"picard_history.txt"
 	);
 	
-	vfs_test_cat( "/afs/usr/share/test_data/picard_history.txt" );
+	vfs_test_cat( "/usr/share/test_data/picard_history.txt" );
 
 	afs_dump_diagnostic_data();
 }
@@ -152,9 +154,8 @@ void vfs_test_ramfs( void ) {
 	char proc_build_num[] = "1984";
 	char proc_magic[] = "NCC-1701-D";
 
-	vfs_test_create_file( "/", "test.txt", hello_data, sizeof(hello_data) );
-	vfs_test_create_file( "/", "test_2.txt", hello_data_b, sizeof(hello_data_b) );
-	vfs_test_create_dir( "/", "proc" );
+	vfs_test_create_file( "/proc", "test.txt", hello_data, sizeof(hello_data) );
+	vfs_test_create_file( "/proc", "test_2.txt", hello_data_b, sizeof(hello_data_b) );
 	vfs_test_create_dir( "/proc", "build" );
 	vfs_test_create_file( "/proc", "magic", proc_magic, sizeof(proc_magic) );
 	vfs_test_create_file( "/proc/build", "number", proc_build_num, sizeof(proc_build_num) );
@@ -286,7 +287,7 @@ void vfs_test_cat( char *pathname ) {
 
 	vfs_debugf( "cat %s\n", pathname );
 	vfs_debugf( "size: %d\n", stats.size );
-	vfs_debugf( "%s\n", data );
+	//vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
 }
 
