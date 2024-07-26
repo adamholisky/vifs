@@ -1,0 +1,71 @@
+//------------------------------------------------
+//--- 010 Editor v14.0.1 Binary Template
+//
+//      File: AFS Image
+//   Authors: Adam Holisky
+//   Version: 2
+//   Purpose: Shows data structures of an AFS drive
+//  Category: Drives
+// File Mask: afs.img
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+#define AFS_MAX_NAME_SIZE 50
+
+typedef struct {
+	char    magic[4];		// "AFS "
+	ubyte 	version;		// version of the drive struct
+	uint64	size;			// overall size of the drive, in bytes
+	uint32	block_size;		// Size of blocks
+	uint32	block_count;	// Number of blocks in the dirve
+	uint32	root_directory;	// starting block of the dir struct for root
+	uint32	next_free;		// next free block
+	uint32	reserved_1;
+	uint32	reserved_2;
+	uint32	reserved_3;
+	uint32	reserved_4;
+	uint32	reserved_5;
+	uint32	reserved_6;
+	uint32	reserved_7;
+	uint32	reserved_8;
+} afs_drive;
+
+typedef struct {
+	uint32	id;				// unique block id (aka: inode)
+	ubyte		block_type;		// type of data the block holds
+	char		name[AFS_MAX_NAME_SIZE];		// name
+	ubyte		in_use;
+} afs_block_meta_data;
+
+typedef struct {
+	uint32	index[256];		// Block index for things in this directory
+	uint32	next_index;		// next index free
+	uint32	reserved_1;
+	uint32	reserved_2;
+	uint32	reserved_3;
+	uint32	reserved_4;
+	uint32	reserved_5;
+	uint32	reserved_6;
+	uint32	reserved_7;
+	uint32	reserved_8;
+} afs_block_directory;
+
+typedef struct {
+    uint32 file_size;
+} afs_file;
+
+typedef union {
+    afs_block_directory directory;
+    afs_file file;
+    ubyte data[ drive.block_size - 1];
+} afs_block_types;
+
+typedef struct {
+    uint32 type;
+    afs_block_types type_details;
+} afs_block;
+
+LittleEndian(); 
+afs_drive drive;
+afs_block_meta_data meta_data[ drive.block_count];

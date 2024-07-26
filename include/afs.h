@@ -63,18 +63,18 @@ typedef struct {
 	uint32_t	reserved_6;
 	uint32_t	reserved_7;
 	uint32_t	reserved_8;
-} afs_drive;
+} __attribute__((packed)) afs_drive;
 
 typedef struct {
 	uint32_t	id;				// unique block id (aka: inode)
 	uint8_t		block_type;		// type of data the block holds
 	char		name[AFS_MAX_NAME_SIZE];		// name
 	bool		in_use;
-} afs_block_meta_data;
+} __attribute__((packed)) afs_block_meta_data;
 
 typedef struct {
 	uint8_t		data[AFS_DEFAULT_BLOCK_SIZE];
-} afs_generic_block;
+} __attribute__((packed)) afs_generic_block;
 
 typedef struct {
 	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_FILE
@@ -87,21 +87,21 @@ typedef struct {
 	uint32_t	reserved_6;
 	uint32_t	reserved_7;
 	uint32_t	reserved_8;
-} afs_file;
+} __attribute__((packed)) afs_file;
 
-typedef struct {
-	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_DIRECTORY
-	uint32_t	index[256];		// Block index for things in this directory
-	uint32_t	next_index;		// next index free
-	uint32_t	reserved_1;
-	uint32_t	reserved_2;
-	uint32_t	reserved_3;
-	uint32_t	reserved_4;
-	uint32_t	reserved_5;
-	uint32_t	reserved_6;
-	uint32_t	reserved_7;
-	uint32_t	reserved_8;
-} afs_block_directory;
+	typedef struct {
+		uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_DIRECTORY
+		uint32_t	index[256];		// Block index for things in this directory
+		uint32_t	next_index;		// next index free
+		uint32_t	reserved_1;
+		uint32_t	reserved_2;
+		uint32_t	reserved_3;
+		uint32_t	reserved_4;
+		uint32_t	reserved_5;
+		uint32_t	reserved_6;
+		uint32_t	reserved_7;
+		uint32_t	reserved_8;
+	} __attribute__((packed)) afs_block_directory;
 
 typedef struct {
 	inode_id vfs_id;
