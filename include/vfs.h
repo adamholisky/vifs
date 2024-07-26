@@ -142,6 +142,20 @@ vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *lis
 inode_id vfs_get_from_dir( inode_id id, char *name );
 
 #ifdef VIFS_DEV
+void vifs_show_help( void );
+int vifs_vfs_initalize( void );
+int vifs_afs_initalize( char *afs_img );
+int vifs_run_os_tests( void );
+void vifs_mkdir( char *pathname );
+void vifs_ls( char *pathname );
+void vifs_cat( char *pathname );
+void vifs_cp( char *src, char *dest );
+void vifs_cpdir( char *src, char *dest );
+void vifs_bootstrap( char *level, char *afs_image );
+void vifs_pathname_to_path( char *pathname, char *path );
+void vifs_pathname_to_name( char *pathname, char *name );
+void vifs_parse_pathname( char *pathname, int path_or_name, char *data );
+
 void vfs_test_ramfs( void );
 void vfs_test_afs( void );
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
@@ -151,6 +165,7 @@ void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
 void vfs_test_cp_real_file( char *real_file_pathname, char *vifs_path, char *vifs_name );
+
 #endif
 
 #ifdef __cplusplus

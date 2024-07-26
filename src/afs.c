@@ -279,7 +279,7 @@ int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 			block_meta_data[drive->next_free].block_type = AFS_BLOCK_TYPE_FILE;
 			block_meta_data[drive->next_free].in_use = true;
 			afs_write_meta( drive->next_free );
-			
+
 			drive->next_free++;
 		}
 	}
@@ -498,13 +498,11 @@ void afs_bootstrap( FILE *fp, uint64_t size ) {
 	//vfs_debugf( "Meta blocks: %ld\n", meta_blocks );
 
 	bs_drive.root_directory = meta_blocks + 1;
-	bs_drive.next_free = meta_blocks + 3; // +2 would be for the first file
-
+	bs_drive.next_free = meta_blocks + 2;
 	// Setup root directory
 	afs_block_directory root_dir;
 	root_dir.type = AFS_BLOCK_TYPE_DIRECTORY;
-	root_dir.index[0] = meta_blocks + 2;
-	root_dir.next_index = 1;
+	root_dir.next_index = 0;
 
 	// Write the drive header
 	afs_bootstrap_write( fp, (void *)&bs_drive, sizeof(afs_drive) );
@@ -525,13 +523,6 @@ void afs_bootstrap( FILE *fp, uint64_t size ) {
 			bs_meta.block_type = AFS_BLOCK_TYPE_DIRECTORY;
 			bs_meta.in_use = true;
 			strcpy( bs_meta.name, "/" );
-		} else if( i == meta_blocks + 2 ) {
-			bs_meta.block_type = AFS_BLOCK_TYPE_FILE;
-			bs_meta.in_use = true;
-			strcpy( bs_meta.name, "magic" );
-			bs_meta.file_size = sizeof("NCC-1701D");
-			bs_meta.starting_block = meta_blocks + 2;
-			bs_meta.num_blocks = 1;
 		} else {
 			bs_meta.block_type = AFS_BLOCK_TYPE_NOT_SET;
 			bs_meta.in_use = false;
@@ -543,11 +534,6 @@ void afs_bootstrap( FILE *fp, uint64_t size ) {
 	// Write the root directory
 	fseek( fp, bs_drive.root_directory * bs_drive.block_size, SEEK_SET );
 	afs_bootstrap_write( fp, (void *)&root_dir, sizeof(afs_block_directory) );
-
-	// Write the magic file data
-	char magic_file_data[] = "NCC-1701D";
-	fseek( fp, (meta_blocks + 2) * bs_drive.block_size, SEEK_SET );
-	afs_bootstrap_write( fp, (void *)&magic_file_data, sizeof(magic_file_data) );
 }
 
 bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size ) {
@@ -583,7 +569,7 @@ void afs_dump_diagnostic_data( void ) {
 		uint64_t offset = sizeof(afs_drive) + (sizeof(afs_block_meta_data) * i );
 		vfs_disk_read( 0, offset, sizeof(afs_block_meta_data), (uint8_t *)dd_meta_data );
 
-		if( dd_meta_data->in_use == true && dd_meta_data->block_type != AFS_BLOCK_TYPE_META ) {
+		if( dd_meta_data->in_use == true && dd_meta_data->block_type != AFS_BLOCK_TYPE_META && dd_meta_data->file_size != 0 ) {
 			vfs_debugf( "afs_block_meta_data for block %d\n", dd_meta_data->id );
 			vfs_debugf( "    block_type: %d\n", dd_meta_data->block_type );
 			vfs_debugf( "    name: \"%s\"\n", dd_meta_data->name );
