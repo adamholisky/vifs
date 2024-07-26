@@ -36,6 +36,8 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 	afs->op.read = afs_read;
 	afs->op.write = afs_write;
 	afs->op.create = afs_create;
+	afs->op.open = afs_open;
+	afs->op.stat = afs_stat;
 
 	afs_data_root = data_root;
 	drive_size = drive_size_in_bytes;
@@ -222,11 +224,12 @@ int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 		afs_type = AFS_BLOCK_TYPE_FILE;
 
 		memset( &file, 0, sizeof(afs_file) );
-		file.file_size = 0;
-		file.type = AFS_BLOCK_TYPE_FILE;
-
 		block_data = &file;
 		block_data_size = sizeof(afs_file);
+
+		block_meta_data[ block_to_use ].file_size = 0;
+		block_meta_data[ block_to_use ].starting_block = block_to_use;
+		block_meta_data[ block_to_use ].num_blocks = 1;
 	}
 
 	// Save the block type
@@ -255,11 +258,31 @@ int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
  * @param size 
  * @param offset 
  * @return int 
+ * 
+ * 
  */
 int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
-	afs_inode *file = afs_lookup_by_inode_id( id );
+	afs_inode *node = afs_lookup_by_inode_id( id );
 
-	afs_write_block( file->block_id, size, (data + offset) );
+	if( block_meta_data[node->block_id].block_type != AFS_BLOCK_TYPE_FILE ) {
+		vfs_debugf( "Block is not a file.\n" );
+		return 0;
+	}
+
+	// TODO: Current assumes we're only writing full files starting at offset 0
+	block_meta_data[node->block_id].file_size = size;
+	block_meta_data[node->block_id].num_blocks = 1 + (size/drive->block_size);
+
+	// TODO: Current assumes we're writing immediately at the blocks right after the first one
+	if( block_meta_data[node->block_id].num_blocks != 1 ) {
+		for( int i = 1; i < block_meta_data[node->block_id].num_blocks; i++ ) {
+			drive->next_free++;
+		}
+	}
+
+	afs_write_meta( node->block_id );
+	afs_write_drive_info( drive );
+	vfs_disk_write( 0, drive->block_size * node->block_id, size, data );
 
 	return 0;
 }
@@ -410,6 +433,47 @@ afs_inode *afs_lookup_by_inode_id( inode_id id ) {
 	return inode;
 }
 
+/**
+ * @brief 
+ * 
+ * @param id 
+ * @return int 
+ */
+int afs_open( inode_id id ) {
+	afs_inode *inode = afs_lookup_by_inode_id( id );
+
+	if( inode == NULL ) {
+		return 0;
+	}
+
+	inode->open = true;
+
+	return 1;
+}
+
+/**
+ * @brief 
+ * 
+ * @param id 
+ * @param stat 
+ * @return int 
+ */
+int afs_stat( inode_id id, vfs_stat_data *stat ) {
+	afs_inode *inode = afs_lookup_by_inode_id( id );
+
+	if( inode == NULL ) {
+		return 0;
+	}
+
+	stat->size = block_meta_data[ inode->block_id ].file_size;
+
+	return 1;
+}
+
+
+
+
+
 void afs_bootstrap( FILE *fp, uint64_t size ) {
 	afs_drive bs_drive;
 
@@ -461,6 +525,9 @@ void afs_bootstrap( FILE *fp, uint64_t size ) {
 			bs_meta.block_type = AFS_BLOCK_TYPE_FILE;
 			bs_meta.in_use = true;
 			strcpy( bs_meta.name, "magic" );
+			bs_meta.file_size = sizeof("NCC-1701D");
+			bs_meta.starting_block = meta_blocks + 2;
+			bs_meta.num_blocks = 1;
 		} else {
 			bs_meta.block_type = AFS_BLOCK_TYPE_NOT_SET;
 			bs_meta.in_use = false;
@@ -474,13 +541,8 @@ void afs_bootstrap( FILE *fp, uint64_t size ) {
 	afs_bootstrap_write( fp, (void *)&root_dir, sizeof(afs_block_directory) );
 
 	// Write the magic file data
-	afs_file magic_file;
-	magic_file.file_size = sizeof("NCC-1701D");
-	magic_file.type = AFS_BLOCK_TYPE_FILE;
 	char magic_file_data[] = "NCC-1701D";
-
 	fseek( fp, (meta_blocks + 2) * bs_drive.block_size, SEEK_SET );
-	afs_bootstrap_write( fp, (void *)&magic_file, sizeof(afs_file) );
 	afs_bootstrap_write( fp, (void *)&magic_file_data, sizeof(magic_file_data) );
 }
 
@@ -521,6 +583,12 @@ void afs_dump_diagnostic_data( void ) {
 			vfs_debugf( "afs_block_meta_data for block %d\n", dd_meta_data->id );
 			vfs_debugf( "    block_type: %d\n", dd_meta_data->block_type );
 			vfs_debugf( "    name: \"%s\"\n", dd_meta_data->name );
+
+			if( dd_meta_data->block_type == AFS_BLOCK_TYPE_FILE ) {
+				vfs_debugf( "    starting_block: %d\n", dd_meta_data->starting_block );
+				vfs_debugf( "    size: %d\n", dd_meta_data->file_size );
+				vfs_debugf( "    num_blocks: %d (expected: %d)\n", dd_meta_data->num_blocks, 1 + (dd_meta_data->file_size / dd_drive->block_size) );
+			}
 		}
 	}
 	vfs_debugf( "\n" );

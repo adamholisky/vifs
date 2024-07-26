@@ -25,6 +25,7 @@ int rfs_initalize( void ) {
 	rfs->op.write = rfs_write;
 	rfs->op.read = rfs_read;
 	rfs->op.get_dir_list = rfs_dir_list;
+	rfs->op.stat = rfs_stat;
 
 	rfs_files.head = NULL;
 	rfs_files.tail = NULL;
@@ -41,6 +42,19 @@ int rfs_initalize( void ) {
  */
 int rfs_open( inode_id id ) {
 
+}
+
+int rfs_stat( inode_id id, vfs_stat_data *stat ) {
+	rfs_file *f = rfs_lookup_by_inode_id( id );
+
+	if( f == NULL ) {
+		vfs_debugf( "f is null in rfs_stat.\n" );
+		return 0;
+	}
+
+	stat->size = f->size;
+
+	return 1;
 }
 
 /**

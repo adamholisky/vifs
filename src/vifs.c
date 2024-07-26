@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "vfs.h"
 #include "rfs.h"
 #include "afs.h"
@@ -121,12 +122,26 @@ void vfs_test_afs( void ) {
 	vfs_test_create_dir( "/afs", "usr" );
 	vfs_test_create_dir( "/afs/usr", "share" );
 	vfs_test_create_dir( "/afs/usr/share", "fonts" );
+	vfs_test_create_dir( "/afs/usr/share", "test_data" );
 
 	vfs_test_ls( "/afs" );
 	vfs_test_ls( "/afs/usr" );
 	vfs_test_ls( "/afs/usr/share" );
 	
 	vfs_test_cat( "/afs/hello" );
+	vfs_test_cp_real_file( 
+		"/usr/local/osdev/versions/vifs/afs_img_files/share/fonts/Gomme10x20n.bdf", 
+		"/afs/usr/share/fonts",
+		"Gomme10x20n.bdf"
+	);
+
+	vfs_test_cp_real_file( 
+		"/usr/local/osdev/versions/vifs/afs_img_files/share/test_data/picard_history.txt",
+		"/afs/usr/share/test_data",
+		"picard_history.txt"
+	);
+	
+	vfs_test_cat( "/afs/usr/share/test_data/picard_history.txt" );
 
 	afs_dump_diagnostic_data();
 }
@@ -150,6 +165,37 @@ void vfs_test_ramfs( void ) {
 	
 	vfs_test_cat( "/proc/magic" );
 	vfs_test_cat( "/proc/build/number" );
+}
+
+/**
+ * @brief Copies a file from the host drive into the vifs drive (and writes to disk as apporpriate)
+ * 
+ * @param real_file_pathname 
+ * @param vifs_name 
+ * @param data 
+ * @param size 
+ */
+void vfs_test_cp_real_file( char *real_file_pathname, char *vifs_path, char *vifs_name ) {
+	FILE *f = fopen( real_file_pathname, "r" );
+
+	if( f == NULL ) {
+		vfs_debugf( "Cannot copy %s, f returned NULL.\n", real_file_pathname );
+		return;
+	}
+
+	struct stat file_meta;
+	stat( real_file_pathname, &file_meta );
+
+	uint8_t *buff = vfs_malloc( file_meta.st_size );
+
+	if( fread( buff, file_meta.st_size, 1, f ) != 1 ) {
+		vfs_debugf( "Read failed on %s, fread returned not 1.\n", real_file_pathname );
+		return;
+	}
+
+	vfs_test_create_file( vifs_path, vifs_name, buff, file_meta.st_size );
+
+	vfs_free( buff );
 }
 
 /**
@@ -226,13 +272,20 @@ void vfs_test_ls( char *path ) {
  * @param pathname 
  */
 void vfs_test_cat( char *pathname ) {
-	char *data = vfs_malloc( 1024 );
-	int read_err = vfs_read( vfs_lookup_inode(pathname), data, 1024, 0 );
+	vfs_stat_data stats;
+
+	vfs_stat( vfs_lookup_inode(pathname), &stats );
+
+	char *data = vfs_malloc( stats.size );
+	int read_err = vfs_read( vfs_lookup_inode(pathname), data, stats.size, 0 );
 	if( read_err < 0 ) {
 		vfs_panic( "Error when reading.\n" );
 	}
 
+	data[ stats.size ] = 0;
+
 	vfs_debugf( "cat %s\n", pathname );
+	vfs_debugf( "size: %d\n", stats.size );
 	vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
 }

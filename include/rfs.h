@@ -47,6 +47,7 @@ int rfs_mount( inode_id id, char *path, uint8_t *data_root );
 int rfs_create( inode_id parent, uint8_t type, char *path, char *name );
 int rfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int rfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+int rfs_stat( inode_id id, vfs_stat_data *stat );
 vfs_directory_list *rfs_dir_list( inode_id id, vfs_directory_list *list );
 
 #ifdef __cplusplus

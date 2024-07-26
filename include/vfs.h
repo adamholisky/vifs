@@ -17,6 +17,7 @@ extern "C"
 #ifdef VIFS_DEV
 	#define vfs_malloc malloc
 	#define vfs_realloc realloc
+	#define vfs_free free
 	#define vfs_panic printf
 	#define vfs_debugf printf
 	#define vfs_disk_read vfs_disk_read_test
@@ -26,6 +27,7 @@ extern "C"
 
 	#define vfs_malloc kmalloc
 	#define vfs_realloc krealloc
+	#define vfs_free kfree
 	#define vfs_panic debugf
 	#define vfs_debugf debugf
 #endif
@@ -83,6 +85,10 @@ typedef struct {
 	uint16_t count;
 } vfs_directory_list;
 
+typedef struct {
+	uint32_t size;
+} vfs_stat_data;
+
 /**
  * @brief Operations to use for the given VFS
  * 
@@ -101,6 +107,7 @@ typedef struct {
 	vfs_directory_list * (*get_dir_list)( inode_id, vfs_directory_list * );
 	int (*open)( inode_id );
 	void (*close)( inode_id );
+	int (*stat)( inode_id, vfs_stat_data *stat_data );
 } vfs_operations;
 
 /**
@@ -125,6 +132,8 @@ int vfs_create( uint8_t type, char *path, char *name );
 int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int vfs_mkdir( inode_id parent, char *path, char *name );
+int vfs_open( inode_id id );
+int vfs_stat( inode_id id, vfs_stat_data *stat );
 inode_id vfs_lookup_inode( char *pathname );
 vfs_inode *vfs_lookup_inode_ptr( char *pathname );
 vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id );
@@ -141,8 +150,7 @@ void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size 
 void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
-
-
+void vfs_test_cp_real_file( char *real_file_pathname, char *vifs_path, char *vifs_name );
 #endif
 
 #ifdef __cplusplus

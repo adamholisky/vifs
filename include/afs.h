@@ -69,7 +69,17 @@ typedef struct {
 	uint32_t	id;				// unique block id (aka: inode)
 	uint8_t		block_type;		// type of data the block holds
 	char		name[AFS_MAX_NAME_SIZE];		// name
+	uint32_t	file_size;
+	uint32_t	starting_block;
+	uint32_t	num_blocks;
 	bool		in_use;
+	uint32_t	reserved_2;
+	uint32_t	reserved_3;
+	uint32_t	reserved_4;
+	uint32_t	reserved_5;
+	uint32_t	reserved_6;
+	uint32_t	reserved_7;
+	uint32_t	reserved_8;
 } __attribute__((packed)) afs_block_meta_data;
 
 typedef struct {
@@ -77,8 +87,13 @@ typedef struct {
 } __attribute__((packed)) afs_generic_block;
 
 typedef struct {
-	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_FILE
-	uint32_t	file_size;		// size of the actual file data
+	uint8_t data[ AFS_DEFAULT_BLOCK_SIZE ];
+} __attribute__((packed)) afs_file;
+
+typedef struct {
+	uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_DIRECTORY
+	uint32_t	index[256];		// Block index for things in this directory
+	uint32_t	next_index;		// next index free
 	uint32_t	reserved_1;
 	uint32_t	reserved_2;
 	uint32_t	reserved_3;
@@ -87,25 +102,12 @@ typedef struct {
 	uint32_t	reserved_6;
 	uint32_t	reserved_7;
 	uint32_t	reserved_8;
-} __attribute__((packed)) afs_file;
-
-	typedef struct {
-		uint32_t 	type;			// Type, always AFS_BLOCK_TYPE_DIRECTORY
-		uint32_t	index[256];		// Block index for things in this directory
-		uint32_t	next_index;		// next index free
-		uint32_t	reserved_1;
-		uint32_t	reserved_2;
-		uint32_t	reserved_3;
-		uint32_t	reserved_4;
-		uint32_t	reserved_5;
-		uint32_t	reserved_6;
-		uint32_t	reserved_7;
-		uint32_t	reserved_8;
-	} __attribute__((packed)) afs_block_directory;
+} __attribute__((packed)) afs_block_directory;
 
 typedef struct {
 	inode_id vfs_id;
 	uint32_t block_id;
+	bool open;
 	void *next;
 } afs_inode;
 
@@ -119,6 +121,8 @@ afs_inode *afs_lookup_by_inode_id( inode_id id );
 int afs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int afs_create( inode_id parent, uint8_t type, char *path, char *name );
 int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+int afs_open( inode_id id );
+int afs_stat( inode_id id, vfs_stat_data *stat );
 uint8_t *afs_read_block( uint32_t block_id, uint64_t size, uint8_t *data );
 uint8_t *afs_write_block( uint32_t block_id, uint64_t size, uint8_t *data );
 int afs_write_meta( uint32_t block_id );

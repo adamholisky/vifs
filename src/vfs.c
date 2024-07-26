@@ -327,6 +327,22 @@ int vfs_mkdir( inode_id parent, char *path, char *name ) {
 	return vfs_create( VFS_INODE_TYPE_DIR, path, name );
 }
 
+int vfs_open( inode_id id ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	return fs->op.open( id );
+}
+
+int vfs_stat( inode_id id, vfs_stat_data *stat_data ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	return fs->op.stat( id, stat_data );
+}
+
 /**
  * @brief Returns each file in the provided directory
  * 
@@ -371,6 +387,8 @@ inode_id vfs_get_from_dir( inode_id id, char *name ) {
 
 	return 0;
 }
+
+
 
 extern FILE *fp;
 
