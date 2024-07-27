@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <errno.h>					
 #include "vfs.h"
 #include "rfs.h"
 #include "afs.h"
@@ -46,6 +51,7 @@ FILE *fp;
 #define COMMAND_LS 7
 #define COMMAND_MKDIR 8
 #define COMMAND_CAT 9
+#define COMMAND_NEW 10
 
 #define WANT_PATH 0
 #define WANT_NAME 1
@@ -100,6 +106,9 @@ int main( int argc, char *argv[] ) {
 			} else if( INPUT_IS( "-v" ) ) {
 				verbose = true;
 				expect_params = 0;
+			} else if( INPUT_IS( "new" ) ) {
+				command = COMMAND_NEW;
+				expect_params = 1;
 			} else {
 				printf( "Unexpected command.\n" );
 				return 0;
@@ -124,7 +133,7 @@ int main( int argc, char *argv[] ) {
 
 	vifs_vfs_initalize();
 
-	if( command == COMMAND_RUN_OS_TESTS || command == COMMAND_HELP || command == COMMAND_BOOTSTRAP ) {
+	if( command == COMMAND_NEW || command == COMMAND_RUN_OS_TESTS || command == COMMAND_HELP || command == COMMAND_BOOTSTRAP ) {
 		// do nothing
 	} else {
 		if( afs_img != NULL ) {
@@ -143,11 +152,10 @@ int main( int argc, char *argv[] ) {
 			break;
 		case COMMAND_BOOTSTRAP:
 			if( afs_img == NULL ) {
-				printf( "Must specify -afs <image> when boostrapping.\n" );
-
-				return 0;
+				vifs_bootstrap( param_1, "afs.img" );
+			} else {
+				vifs_bootstrap( param_1, afs_img );
 			}
-			vifs_bootstrap( param_1, afs_img );
 			break;
 		case COMMAND_RUN_OS_TESTS:
 			vifs_run_os_tests();
@@ -164,6 +172,14 @@ int main( int argc, char *argv[] ) {
 		case COMMAND_CAT:
 			vifs_cat( param_1 );
 			break;
+		case COMMAND_NEW:
+			if( afs_img == NULL ) {
+				vifs_new_drive_img( param_1, "afs.img" );
+			} else {
+				vifs_new_drive_img( param_1, afs_img );
+			}
+			
+			break;
 		default:
 			printf( "Unknown command.\n" );
 	}
@@ -174,17 +190,64 @@ int main( int argc, char *argv[] ) {
 void vifs_show_help( void ) {
 	printf( "vifs [command] [parameters] [options]\n" );
 	printf( "     Commands and Parameters:\n");
-	printf( "         ls <directory>\n" );
-	printf( "         mkdir <pathname>\n" );
+	printf( "         bootstrap <level>\n" );
+	printf( "              Formats a drive to a default state\n" );
+	printf( "              Level 0 = empty drive\n" );
+	printf( "              Level 1 = test data\n" );
 	printf( "         cat <pathname>\n" );
+	printf( "              Sends file to stdout\n" );
 	printf( "         cp <source_file> <dest_file>\n" );
-	printf( "         bootstrap <level> (0 = empty drive, 1 = test data)\n" );
+	printf( "              Copies host's source_file to AFS drive at dest_file\n" );
 	printf( "         cpdir <source_directory> <dest_dir>\n" );
+	printf( "              Recursively copies host's source dir to AFF's dest dir\n" );
+	printf( "         ls <directory>\n" );
+	printf( "              Lists the contents of a directory\n" );
+	printf( "         mkdir <pathname>\n" );
+	printf( "              Creates the given directory (non-recursive)\n" );
+	printf( "         new <size>\n" );
+	printf( "              Creates an empty image file of size\n" );
 	printf( "         ostests\n" );
+	printf( "              Runs series of tests on RamFS and AFS drives\n" );
 	printf( "\n" );
 	printf( "     Options:\n" );
-	printf( "         -afs <afs_image_file>    Specify afs file, otherwise use afs.img\n" );
-	printf( "         -v    Turns on verbose mode\n" );
+	printf( "         -afs <afs_image_file>\n" );
+	printf( "              Specify afs file, otherwise use afs.img\n" );
+	printf( "         -v   Turns on verbose mode\n" );
+}
+
+void vifs_new_drive_img( char *size, char *afs_image ) {
+	// dd if=/dev/zero of=./afs.img bs=4k iflag=fullblock,count_bytes count=200M
+
+	char size_line[50];
+	memset( size_line, 0, 50 );
+	strcpy( size_line, "count=" );
+	strcat( size_line, size );
+	strcat( size_line, "M" );
+
+	char of_line[255];
+	memset( of_line, 0, 255 );
+	strcpy( of_line, "of=" );
+	strcat( of_line, afs_image );
+
+	printf( "size: %s\n", size );
+	printf( "size line: %s\n", size_line );
+
+
+	char *argv[] = {
+		"dd",
+		"if=/dev/zero",
+		of_line,
+		"bs=4k",
+		"iflag=fullblock,count_bytes",
+		size_line,
+		NULL
+	};
+
+	int error = execvp( argv[0], argv );
+
+	if( error == -1 ) {
+		printf( "Error: %s\n", strerror(errno) );
+	}
 }
 
 /**
@@ -213,6 +276,54 @@ void vifs_cp( char *src, char *dest ) {
  */
 void vifs_cpdir( char *src, char *dest ) {
 	verbosef( "cpdir from %s to %s\n", src, dest );
+
+	DIR *d;
+	struct dirent *dir;
+	char src_loc_full[256];
+	char dest_loc_full[256];
+
+	d = opendir( src );
+
+	if(d) {
+		while( (dir = readdir(d)) != NULL ) {
+			memset( src_loc_full, 0, 256 );
+			memset( dest_loc_full, 0, 256 );
+
+			if( strcmp( dir->d_name, "." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			if( strcmp( dir->d_name, ".." ) == 0 ) {
+				// Skip and continue
+				continue;
+			}
+
+			strcpy( src_loc_full, src );
+			strcat( src_loc_full, "/" );
+			strcat( src_loc_full, dir->d_name );
+
+			strcpy( dest_loc_full, dest );
+			if( strcmp( dest, "/" ) != 0 ) {
+				strcat( dest_loc_full, "/" );
+			}
+			strcat( dest_loc_full, dir->d_name );
+
+			printf( "%s -> %s\n", src_loc_full, dest_loc_full );
+
+			if( dir->d_type == DT_REG ) {
+				vifs_cp( src_loc_full, dest_loc_full );
+			} else if( dir->d_type == DT_DIR ) {
+				vifs_mkdir( dest_loc_full );
+				vifs_cpdir( src_loc_full, dest_loc_full );
+			}
+		}
+
+		closedir(d);
+	} else {
+		printf( "d is empty.\n" );
+		return;
+	}
 }
 
 /**

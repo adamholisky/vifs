@@ -152,6 +152,7 @@ void vifs_cat( char *pathname );
 void vifs_cp( char *src, char *dest );
 void vifs_cpdir( char *src, char *dest );
 void vifs_bootstrap( char *level, char *afs_image );
+void vifs_new_drive_img( char *size, char *afs_image );
 void vifs_pathname_to_path( char *pathname, char *path );
 void vifs_pathname_to_name( char *pathname, char *name );
 void vifs_parse_pathname( char *pathname, int path_or_name, char *data );
