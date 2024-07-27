@@ -20,7 +20,7 @@
 				"type": "gdb",
 				"request": "launch",
 				"target": "./vifs",
-				"arguments": "cpdir ./afs_img_files / -afs afs.img",
+				"arguments": "ostests",
 				"cwd": "${workspaceRoot}",
 				"valuesFormatting": "parseText"
 			}

@@ -575,7 +575,7 @@ int vifs_run_os_tests( void ) {
 
 	// Directory for RFS
 	vfs_mkdir( 1, "/", "proc" );
-
+ 
 	// Initalize RFS
 	int rfs_init_err = rfs_initalize();
 	if( rfs_init_err != 0 ) {
@@ -594,8 +594,12 @@ int vifs_run_os_tests( void ) {
 	}
 	vfs_debugf( "Mounted RFS.\n" );
 
+	//vfs_mkdir( 1, "/", "proc" );
+
 	vfs_test_ramfs();
 	vfs_test_afs();
+
+	vfs_cache_diagnostic();
 }
 
 /**
@@ -604,14 +608,19 @@ int vifs_run_os_tests( void ) {
  */
 void vfs_test_afs( void ) {
 	vfs_test_ls( "/" );
-	vfs_test_ls( "/usr" );
-	vfs_test_ls( "/usr/share" );
+	vfs_test_ls( "/share" );
+	vfs_test_ls( "/share/test_data" );
+	vfs_test_ls( "/home/adam" );
 	
-	vfs_test_cat( "/hello" );
+	vfs_test_cat( "/home/adam/magic" );
 	
-	vfs_test_cat( "/usr/share/test_data/picard_history.txt" );
+	vfs_test_cat( "/share/test_data/picard_history.txt" );
 
-	afs_dump_diagnostic_data();
+	vifs_mkdir( "/usr" );
+	vifs_mkdir( "/usr/bin" );
+	vfs_test_cat( "/share/test_data/picard_history.txt" );
+
+	//afs_dump_diagnostic_data();
 }
 
 /**
@@ -757,7 +766,7 @@ void vfs_test_cat( char *pathname ) {
 
 	vfs_debugf( "cat %s\n", pathname );
 	vfs_debugf( "size: %d\n", stats.size );
-	vfs_debugf( "%s\n", data );
+	//vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
 }
 

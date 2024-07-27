@@ -2,10 +2,26 @@
 #include "rfs.h"
 #include "afs.h"
 
+#undef VFS_CACHE_DEBUG
+
 vfs_filesystem *file_systems;
 vfs_inode root_inode;
 vfs_inode *inode_index_tail;
 inode_id vfs_inode_id_top;
+
+vfs_cache_list cache;
+uint64_t cache_hits;
+uint64_t cache_misses;
+uint64_t cache_read_success;
+uint64_t cache_read_fail;
+uint64_t cache_write_success;
+uint64_t cache_write_fail;
+uint64_t cache_write_old;
+uint64_t cache_write_new;
+uint64_t cache_total_out;
+uint64_t cache_total_in;
+uint64_t cache_disk_read_calls;
+uint64_t cache_disk_write_calls;
 
 /**
  * @brief Initalizes the VFS
@@ -26,6 +42,8 @@ int vfs_initalize( void ) {
 	inode_index_tail = &root_inode;
 
 	vfs_inode_id_top = 2;
+
+	vfs_cache_initalize();
 
 	return 0;
 }
@@ -385,6 +403,208 @@ inode_id vfs_get_from_dir( inode_id id, char *name ) {
 	return 0;
 }
 
+/**
+ * @brief Returns true if the memory at addr and size is cached
+ * 
+ * @param addr Address to test if it's cached
+ * @param size Size of data we want to access in cache
+ * @return pointer Cache item
+ * @return NULL Cache miss
+ */
+vfs_cache_item *vfs_cache_is_cached( uint64_t addr, uint32_t size ) {
+	if( cache.head == NULL ) {
+		return false;
+	}
+
+	vfs_cache_item *ci = cache.head;
+
+	do {
+		// If the address is greater than or equal to the cached addr, look more
+		// otherwise go to the next item
+		if( addr >= ci->address ) {
+			// If the searched for size is less than or equal to the cached size,
+			// then look more. Otherwise go to the next item.
+			if( size <= ci->size ) {
+				// It's possible from above that the we get addr = 10, size = 3
+				// and ci.addr = 0, ci.size = 10. This would cause a buffer overflow.
+				// If addr + size are within ci.addr + ci.size, we have a hit for
+				// sure, otherwise fail for now (but TODO: expand the cache area).
+				// This expansion will prevent overlapping addresses in MOST situations
+				if( addr + size <= ci->address + ci->size ) {
+					#ifdef VFS_CACHE_DEBUG
+					vfs_debugf( "Cache hit @ %ld\n", addr );
+					#endif
+
+					cache_hits++;
+					return ci;
+				} else {
+					// Expand the cached area
+				}
+			}
+		}
+
+		ci = ci->next;
+	} while( ci != NULL );
+
+	#ifdef VFS_CACHE_DEBUG
+	vfs_debugf( "Cache miss @ %ld\n", addr );
+	#endif 
+
+	cache_misses++;
+	return NULL;
+}
+
+/**
+ * @brief Gets the cache at addr, copies it into data, for size length
+ * 
+ * @param addr 
+ * @param size 
+ * @param data 
+ * 
+ * @return true if we read from the cache
+ */
+bool vfs_cache_read( uint64_t addr, uint32_t size, uint8_t *data ) {
+	vfs_cache_item *ci = vfs_cache_is_cached( addr, size );
+
+	if( ci != NULL ) {
+		uint32_t offset = addr - ci->address;
+		memcpy( data, ci->data + offset, size );
+		ci->read_count++;
+		cache_read_success++;
+		cache_total_out =+ size;
+		return true;
+	}
+
+	cache_read_fail++;
+	return false;
+}
+
+/**
+ * @brief Writes data to the cache at addr for size
+ * 
+ * @param addr 
+ * @param size 
+ * @param data 
+ * 
+ * @return true if we wrote to the cache, false otherwise
+ */
+bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty ) {
+	vfs_cache_item *ci = vfs_cache_is_cached( addr, size );
+
+	if( ci != NULL ) {
+		uint32_t offset = addr - ci->address;
+		memcpy( ci->data + offset, data, size );
+		ci->dirty = dirty;
+		ci->write_count++;
+		cache_write_old++;
+		cache_write_success++;
+		cache_total_in = cache_total_in + size;
+		return true;
+	} else {
+		ci = vfs_malloc( sizeof(vfs_cache_item) );
+
+		if( ci == NULL ) {
+			cache_write_fail++;
+			return false;
+		}
+
+		if( cache.head == NULL ) {
+			cache.head = ci;
+			cache.tail = ci;
+		} else {
+			cache.tail->next = ci;
+			cache.tail = ci;
+		}
+
+		ci->address = addr;
+		ci->size = size;
+		ci->next = NULL;
+		ci->data = vfs_malloc( size );
+		ci->dirty = dirty;
+		if( dirty ) {
+			ci->write_count = 1;
+		} else {
+			ci->write_count = 0;
+		}
+		ci->read_count = 0;
+		memcpy( ci->data, data, size );
+		
+		cache_write_success++;
+		cache_write_new++;
+		cache_total_in = cache_total_in + size;
+		vfs_debugf( "write size: %d\n", size );
+		return true;
+	}
+
+	cache_write_fail++;
+	return false;
+}
+
+/**
+ * @brief Initalizes the vfs cache
+ * 
+ */
+void vfs_cache_initalize( void ) {
+	cache.head = NULL;
+	cache.tail = NULL;
+	cache_hits = 0;
+	cache_misses = 0;
+	cache_read_success = 0;
+	cache_read_fail = 0;
+	cache_write_success = 0;
+	cache_write_fail = 0;
+	cache_write_old = 0;
+	cache_write_new = 0;
+	cache_total_in = 0;
+	cache_total_out = 0;
+	cache_disk_read_calls = 0;
+	cache_disk_write_calls = 0;
+}
+
+void vfs_cache_diagnostic( void ) {
+	uint64_t total_size = 0;
+	uint64_t total_objects = 0;
+
+	vfs_cache_item *ci = cache.head;
+
+	if( ci == NULL ) {
+		vfs_debugf( "No cache.\n" );
+		return;
+	}
+
+	do {
+		total_size = total_size + ci->size;
+		total_objects++;
+
+		ci = ci->next;
+	} while( ci != NULL );
+
+	vfs_debugf( "Cache objects:       %ld\n", total_objects );
+	vfs_debugf( "Cache total size:    %ld\n", total_size );
+	vfs_debugf( "Cache total out:     %ld\n", cache_total_out );
+	vfs_debugf( "Cache total in:      %ld\n", cache_total_in );
+	vfs_debugf( "Cache hits:          %ld\n", cache_hits );
+	vfs_debugf( "Cache misses:        %ld\n", cache_misses );
+	vfs_debugf( "Cache read success:  %ld\n", cache_read_success );
+	vfs_debugf( "Cache read fail:     %ld\n", cache_read_fail );
+	vfs_debugf( "Cache write success: %ld\n", cache_write_success );
+	vfs_debugf( "Cache write fail:    %ld\n", cache_write_fail );
+	vfs_debugf( "Cache write new:     %ld\n", cache_write_new );
+	vfs_debugf( "Cache write old:     %ld\n", cache_write_old );
+	vfs_debugf( "Cache disk r calls:  %ld\n", cache_disk_read_calls );
+	vfs_debugf( "Cache disk w calls:  %ld\n", cache_disk_write_calls );
+
+	ci = cache.head;
+
+	do {
+		vfs_debugf( "Cache Object 0x%X:\n", ci->address );
+		vfs_debugf( "    Dirty:   %X    --    Size:    0x%X\n", ci->dirty, ci->size );
+		vfs_debugf( "    Reads:   %ld    --    Writes:  %ld\n", ci->read_count, ci->write_count );
+
+		ci = ci->next;
+	} while( ci != NULL );
+}
+
 #ifdef VIFS_DEV
 
 extern FILE *fp;
@@ -398,12 +618,20 @@ extern FILE *fp;
  * @param length 
  */
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	cache_disk_read_calls++;
+
+	if( vfs_cache_read( offset, length, data ) == true ) {
+		return data;
+	}
+
 	fseek( fp, offset, SEEK_SET );
 	
 	int read_err = fread( data, length, 1, fp );
 
 	if( read_err != 1 ) {
 		vfs_debugf( "vfs_disk_read_test: fread failed.\n" );
+	} else {
+		vfs_cache_write( offset, length, data, false );
 	}
 
 	return data;
@@ -419,6 +647,12 @@ uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, u
  * @return uint8_t* 
  */
 uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	cache_disk_write_calls++;
+
+	if( vfs_cache_write(offset, length, data, true ) == true ) {
+		return data;
+	}
+
 	fseek( fp, offset, SEEK_SET );
 
 	int write_err = fwrite( data, length, 1, fp );

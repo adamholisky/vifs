@@ -125,6 +125,23 @@ typedef struct {
 	void *next_fs; 			// used in vfs code to link to the next FS
 } vfs_filesystem;
 
+typedef struct {
+	uint64_t address;
+	uint32_t size;
+	uint8_t *data;
+	bool dirty;
+
+	uint64_t read_count;
+	uint64_t write_count;
+
+	void *next;
+} vfs_cache_item;
+
+typedef struct {
+	vfs_cache_item *head;
+	vfs_cache_item *tail;
+} vfs_cache_list;
+
 int vfs_initalize( void );
 vfs_filesystem *vfs_register_fs( vfs_filesystem *fs );
 vfs_filesystem *vfs_get_fs( uint8_t fs_type );
@@ -148,6 +165,12 @@ void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size 
 void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
+
+void vfs_cache_initalize( void );
+vfs_cache_item *vfs_cache_is_cached( uint64_t addr, uint32_t size );
+bool vfs_cache_read( uint64_t addr, uint32_t size, uint8_t *data );
+bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty );
+void vfs_cache_diagnostic( void );
 
 #ifdef VIFS_DEV
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
