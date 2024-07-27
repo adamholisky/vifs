@@ -10,6 +10,12 @@ extern "C"
 #include <stdbool.h>
 #include "vfs.h"
 
+#ifndef VIFS_OS
+    #include <stdlib.h>
+    #include <string.h>
+    #include <stdio.h>
+#endif
+
 #define RFS_FILE_TYPE_DIR 0
 #define RFS_FILE_TYPE_FILE 1
 #define RFS_FILE_TYPE_LINK 2

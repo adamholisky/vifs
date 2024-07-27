@@ -1,12 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <unistd.h>
-#include <errno.h>					
+#include "vifs.h"				
 #include "vfs.h"
 #include "rfs.h"
 #include "afs.h"
@@ -768,6 +760,5 @@ void vfs_test_cat( char *pathname ) {
 	vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
 }
-
 
 #endif

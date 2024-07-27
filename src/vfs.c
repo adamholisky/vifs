@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "vfs.h"
 #include "rfs.h"
 #include "afs.h"
@@ -388,7 +385,7 @@ inode_id vfs_get_from_dir( inode_id id, char *name ) {
 	return 0;
 }
 
-
+#ifdef VIFS_DEV
 
 extern FILE *fp;
 
@@ -434,3 +431,17 @@ uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, 
 
 	return data;
 }
+
+#else
+
+uint8_t *vfs_disk_read_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	ahci_read_at_byte_offset( offset, length, data );
+
+	return data;
+}
+
+uint8_t *vfs_disk_write_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+
+}
+
+#endif

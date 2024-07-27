@@ -11,6 +11,9 @@ extern "C"
 
 #ifndef VIFS_OS
 	#define VIFS_DEV
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
 #endif
 
 // We define function aliases here to support multiple systems
@@ -24,12 +27,15 @@ extern "C"
 	#define vfs_disk_write vfs_disk_write_test
 #else
 	#include <kernel_common.h>
+	#include <ahci.h>
 
 	#define vfs_malloc kmalloc
 	#define vfs_realloc krealloc
 	#define vfs_free kfree
 	#define vfs_panic debugf
 	#define vfs_debugf debugf
+	#define vfs_disk_read vfs_disk_read_or_cache
+	#define vfs_disk_write vfs_disk_write_or_cache
 #endif
 
 typedef uint64_t inode_id;
@@ -44,8 +50,6 @@ typedef uint64_t inode_id;
 #define VFS_INODE_TYPE_DIR 2
 
 #define VFS_ERROR_NONE 0
-
-
 
 typedef struct {
 	uint64_t pos;   // Position of read/write head
@@ -121,10 +125,7 @@ typedef struct {
 	void *next_fs; 			// used in vfs code to link to the next FS
 } vfs_filesystem;
 
-
-
 int vfs_initalize( void );
-
 vfs_filesystem *vfs_register_fs( vfs_filesystem *fs );
 vfs_filesystem *vfs_get_fs( uint8_t fs_type );
 int vfs_mount( uint8_t fs_type, uint8_t *data, char *path );
@@ -141,32 +142,16 @@ vfs_inode *vfs_allocate_inode( void );
 vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list );
 inode_id vfs_get_from_dir( inode_id id, char *name );
 
-#ifdef VIFS_DEV
-void vifs_show_help( void );
-int vifs_vfs_initalize( void );
-int vifs_afs_initalize( char *afs_img );
-int vifs_run_os_tests( void );
-void vifs_mkdir( char *pathname );
-void vifs_ls( char *pathname );
-void vifs_cat( char *pathname );
-void vifs_cp( char *src, char *dest );
-void vifs_cpdir( char *src, char *dest );
-void vifs_bootstrap( char *level, char *afs_image );
-void vifs_new_drive_img( char *size, char *afs_image );
-void vifs_pathname_to_path( char *pathname, char *path );
-void vifs_pathname_to_name( char *pathname, char *name );
-void vifs_parse_pathname( char *pathname, int path_or_name, char *data );
-
 void vfs_test_ramfs( void );
 void vfs_test_afs( void );
-uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size );
 void vfs_test_create_dir( char *path, char *name );
 void vfs_test_ls( char *path );
 void vfs_test_cat( char *pathname );
-void vfs_test_cp_real_file( char *real_file_pathname, char *vifs_path, char *vifs_name );
 
+#ifdef VIFS_DEV
+uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 #endif
 
 #ifdef __cplusplus

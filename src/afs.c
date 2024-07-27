@@ -1,12 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
 #include "vfs.h"
 #include "afs.h"
-#include <sys/stat.h>
-#include <dirent.h>
 
 uint8_t *afs_data_root;
 

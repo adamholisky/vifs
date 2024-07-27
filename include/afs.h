@@ -10,6 +10,16 @@ extern "C"
 #include <stdbool.h>
 #include "vfs.h"
 
+#ifndef VIFS_OS
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <stdint.h>
+	#include <stdbool.h>
+	#include <string.h>
+	#include <sys/stat.h>
+	#include <dirent.h>
+#endif
+
 /* 
 
 Disk layout
@@ -32,8 +42,6 @@ Block Calculation
 	14417920 bytes of block meta data
 
 */
-
-
 
 #define AFS_VERSION_1 2
 

@@ -1,11 +1,5 @@
-#include <stdio.h>
 #include "vfs.h"
 #include "rfs.h"
-
-#ifdef VIFS_DEV
-#include <stdlib.h>
-#include <string.h>
-#endif
 
 rfs_file_list rfs_files;
 
