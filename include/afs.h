@@ -140,10 +140,8 @@ int afs_write_drive_info( afs_drive *drive_info );
 void afs_dump_diagnostic_data( void );
 
 #ifdef VIFS_DEV
-
-void afs_bootstrap( FILE *fp, uint64_t size );
-bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size );
-
+	void afs_bootstrap( FILE *fp, uint64_t size );
+	bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size );
 #endif
 
 #ifdef __cplusplus

@@ -44,8 +44,6 @@ typedef struct {
     uint64_t count;
 } rfs_file_list;
 
-
-
 int rfs_initalize( void );
 rfs_file *rfs_lookup_by_inode_id( inode_id id );
 int rfs_open( inode_id id );

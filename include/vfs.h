@@ -209,7 +209,6 @@ void vfs_cache_diagnostic( void );
 	bool vfs_disk_read_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 	uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 	bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-
 #else
 	uint8_t *vfs_disk_read_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 	uint8_t *vfs_disk_write_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );

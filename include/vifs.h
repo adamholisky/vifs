@@ -10,7 +10,6 @@ extern "C"
 #include <stdbool.h>
 
 #ifndef VIFS_OS
-	#define VIFS_DEV
     #include <stdio.h>
     #include <stdlib.h>
     #include <string.h>
