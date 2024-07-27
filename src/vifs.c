@@ -495,31 +495,10 @@ int vifs_vfs_initalize( void ) {
  * @return int 
  */
 int vifs_afs_initalize( char *afs_img ) {
-	// Open and size afs.img
-	fp = fopen( afs_img, "r+" );
+	fp = fopen( "afs.img", "r+" );
 
-	if( fp == NULL ) {
-		printf( "Cannot find %s\n", afs_img );
-		return 0;
-	}
-
-	fseek( fp, 0, SEEK_END );
-	uint64_t size = ftell( fp );
-	rewind( fp );
-	
-	// Read afs.img
-	uint8_t *drive_data = vfs_malloc( size );
-	rewind( fp );
-	uint64_t bytes_read = fread( drive_data, size, 1, fp );
-
-	if( bytes_read != 1 ) {
-		printf( "Bytes read failed. Got %ld, expected %ld.\n", bytes_read, size );
-
-		return 1;
-	}
-	
 	// Initalize AFS
-	int afs_init_err = afs_initalize( size, drive_data );
+	int afs_init_err = afs_initalize();
 	if( afs_init_err != 0 ) {
 		printf( "AFS initalization failed.\n" );
 
@@ -528,7 +507,7 @@ int vifs_afs_initalize( char *afs_img ) {
 	verbosef( "AFS initalizing done.\n" );
 	
 	// Mount AFS
-	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/" );
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, NULL, "/" );
 	if( afs_mount_err != 0 ) {
 		printf( "Could not mount afs drive.\n" );
 
@@ -545,23 +524,9 @@ int vifs_afs_initalize( char *afs_img ) {
 int vifs_run_os_tests( void ) {
 	// Open and size afs.img
 	fp = fopen( "afs.img", "r+" );
-	fseek( fp, 0, SEEK_END );
-	uint64_t size = ftell( fp );
-	rewind( fp );
-	
-	// Read afs.img
-	uint8_t *drive_data = vfs_malloc( size );
-	rewind( fp );
-	uint64_t bytes_read = fread( drive_data, size, 1, fp );
 
-	if( bytes_read != 1 ) {
-		vfs_panic( "Bytes read failed. Got %ld, expected %ld.\n", bytes_read, size );
-
-		return 1;
-	}
-	
 	// Initalize AFS
-	int afs_init_err = afs_initalize( size, drive_data );
+	int afs_init_err = afs_initalize();
 	if( afs_init_err != 0 ) {
 		vfs_panic( "AFS initalization failed.\n" );
 
@@ -570,7 +535,7 @@ int vifs_run_os_tests( void ) {
 	vfs_debugf( "AFS initalizing done.\n" );
 	
 	// Mount AFS
-	int afs_mount_err = vfs_mount( FS_TYPE_AFS, drive_data, "/" );
+	int afs_mount_err = vfs_mount( FS_TYPE_AFS, NULL, "/" );
 	if( afs_mount_err != 0 ) {
 		vfs_panic( "Could not mount afs drive.\n" );
 
@@ -625,7 +590,7 @@ void vfs_test_afs( void ) {
 	vifs_mkdir( "/usr/bin" );
 	vfs_test_cat( "/share/test_data/picard_history.txt" );
 
-	//afs_dump_diagnostic_data();
+	afs_dump_diagnostic_data();
 }
 
 /**

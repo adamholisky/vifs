@@ -1,10 +1,7 @@
 #include "vfs.h"
 #include "afs.h"
 
-uint8_t *afs_data_root;
-
 afs_drive *drive;
-uint64_t drive_size;
 afs_block_meta_data *block_meta_data;
 afs_block_directory *afs_root_dir;
 afs_inode afs_inodes;
@@ -14,11 +11,9 @@ inode_id afs_id_top;
 /**
  * @brief Initalize the AFS primatives
  * 
- * @param drive_size_in_bytes 
- * @param data_root 
  * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_ on failure
  */
-int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
+int afs_initalize( void ) {
 	vfs_filesystem *afs;
 
 	int reg_err = vfs_register_fs( &afs );
@@ -36,9 +31,6 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 	afs->op.create = afs_create;
 	afs->op.open = afs_open;
 	afs->op.stat = afs_stat;
-
-	afs_data_root = data_root;
-	drive_size = drive_size_in_bytes;
 
 	afs_inodes_tail = &afs_inodes;
 
@@ -124,8 +116,13 @@ int afs_write_drive_info( afs_drive *drive_info ) {
  * @return int VFS_ERROR_NONE if successful, otherwise VFS_ERROR_
  */
 int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
-	afs_data_root = data_root;
-	drive = (afs_drive *)afs_data_root;
+	drive = vfs_malloc( sizeof(afs_drive) );
+
+	if( drive == NULL ) {
+		return VFS_ERROR_MEMORY;
+	}
+
+	drive = (afs_drive *)vfs_disk_read( 0, 0, sizeof(afs_drive), (uint8_t *)drive );
 
 	afs_inodes_tail->block_id = drive->root_directory;
 	afs_inodes_tail->vfs_id = id;
@@ -146,7 +143,9 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
 		return VFS_ERROR_MEMORY;
 	}
 
-	block_meta_data = (afs_block_meta_data *)vfs_disk_read( 1, sizeof(afs_drive), length_of_block_meta, (uint8_t *)block_meta_data );
+	vfs_debugf( "length_of_block_meta: %ld\n", length_of_block_meta );
+
+	vfs_disk_read( 1, sizeof(afs_drive), length_of_block_meta, (uint8_t *)block_meta_data );
 
 	afs_load_directory_as_inodes( id, afs_root_dir );
 

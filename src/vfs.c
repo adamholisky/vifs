@@ -627,7 +627,7 @@ bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty ) 
  */
 bool vfs_cache_flush( vfs_cache_item *ci ) {
 	if( ci->dirty == true ) {
-		vfs_disk_write_test_no_cache( 0, ci->address, ci->size, ci->data );
+		vfs_disk_write_no_cache( 0, ci->address, ci->size, ci->data );
 
 		ci->dirty = false;
 	}
@@ -798,14 +798,43 @@ bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t len
 
 #else
 
-uint8_t *vfs_disk_read_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
-	ahci_read_at_byte_offset( offset, length, data );
+uint8_t *vfs_disk_read( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	cache_disk_read_calls++;
+
+	if( vfs_cache_read( offset, length, data ) == true ) {
+		return data;
+	}
+
+	if( vfs_disk_read_no_cache( drive, offset, length, data ) != NULL ) {
+		vfs_cache_write( offset, length, data, false );
+	}
 
 	return data;
 }
 
-uint8_t *vfs_disk_write_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+uint8_t *vfs_disk_read_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	if( !ahci_read_at_byte_offset( offset, length, data ) ) {
+		vfs_debugf( "Could not read from ahci drive.\n" );
+		return NULL;
+	}
 
+	return data;
+}
+
+uint8_t *vfs_disk_write( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	cache_disk_write_calls++;
+
+	if( vfs_cache_write(offset, length, data, true ) == true ) {
+		return data;
+	}
+
+	vfs_disk_write_no_cache( drive, offset, length, data );
+
+	return data;
+}
+
+uint8_t *vfs_disk_write_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
+	// TODO
 }
 
 #endif

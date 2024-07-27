@@ -9,7 +9,7 @@ extern "C"
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifndef VIFS_OS
+#ifndef VIFS_OS_ENV
 	#define VIFS_DEV
 	#include <stdio.h>
 	#include <stdlib.h>
@@ -29,6 +29,7 @@ extern "C"
 	#define vfs_disk_write_no_cache vfs_disk_write_test_no_cache
 #else
 	#include <kernel_common.h>
+	#include <kmemory.h>
 	#include <ahci.h>
 
 	#define vfs_malloc kmalloc
@@ -36,8 +37,6 @@ extern "C"
 	#define vfs_free kfree
 	#define vfs_panic debugf
 	#define vfs_debugf debugf
-	#define vfs_disk_read vfs_disk_read_or_cache
-	#define vfs_disk_write vfs_disk_write_or_cache
 #endif
 
 typedef uint64_t inode_id;
@@ -210,8 +209,10 @@ void vfs_cache_diagnostic( void );
 	uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 	bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 #else
-	uint8_t *vfs_disk_read_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-	uint8_t *vfs_disk_write_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_read( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_read_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_write( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_write_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 #endif
 
 #ifdef __cplusplus

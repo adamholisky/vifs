@@ -119,7 +119,7 @@ typedef struct {
 	void *next;
 } afs_inode;
 
-int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root );
+int afs_initalize( void );
 int afs_mount( inode_id id, char *path, uint8_t *data_root );
 int afs_load_directory_as_inodes( inode_id parent_inode, afs_block_directory *dir );
 int afs_load_block_as_inode( afs_block_meta_data *meta );

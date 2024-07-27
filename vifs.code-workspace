@@ -9,7 +9,15 @@
 			"stdint.h": "c",
 			"dirent.h": "c",
 			"rfs.h": "c",
-			"cstdint": "c"
+			"cstdint": "c",
+			"chrono": "c",
+			"compare": "c",
+			"format": "c",
+			"array": "c",
+			"string": "c",
+			"string_view": "c",
+			"span": "c",
+			"bitset": "c"
 		}
 	},
 	"launch": {
@@ -21,7 +29,7 @@
 				"type": "gdb",
 				"request": "launch",
 				"target": "./vifs",
-				"arguments": "ostests",
+				"arguments": "ls /",
 				"cwd": "${workspaceRoot}",
 				"valuesFormatting": "parseText"
 			}
