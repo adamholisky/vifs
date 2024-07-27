@@ -61,17 +61,19 @@ typedef uint64_t inode_id;
 #define VFS_ERROR_UNKNOWN_FS -7
 #define VFS_ERROR_FILE_NOT_FOUND -8
 
-typedef struct {
-	uint64_t pos;   // Position of read/write head
-	uint64_t size;  // Size of inode
-	uint32_t fd;    // File descriptor 
-} vfs_file;
-
+/**
+ * @brief Directory list
+ * 
+ */
 typedef struct {
 	inode_id id;
 	void *next_dir;
 } vfs_directory;
 
+/**
+ * @brief Inode structure, representing a file/dir/etc on disk
+ * 
+ */
 typedef struct {
 	uint8_t type;   		// Type of inode
 	uint8_t fs_type;		// File system that controls this inode
@@ -94,11 +96,19 @@ typedef struct {
 	vfs_inode *ptr;
 } vfs_directory_item;
 
+/**
+ * @brief List of direct items
+ * 
+ */
 typedef struct {
 	vfs_directory_item *entry;
 	uint16_t count;
 } vfs_directory_list;
 
+/**
+ * @brief Stat structure, representing a file
+ * 
+ */
 typedef struct {
 	uint32_t size;
 } vfs_stat_data;
@@ -114,14 +124,14 @@ typedef struct {
  */
 
 typedef struct {
-	int (*create)( inode_id, uint8_t, char *, char * );
-	int (*read)( inode_id, uint8_t *, uint64_t, uint64_t );
-	int (*write)( inode_id, uint8_t *, uint64_t, uint64_t );
-	int (*mount)( inode_id, char *, uint8_t * );
-	vfs_directory_list * (*get_dir_list)( inode_id, vfs_directory_list * );
-	int (*open)( inode_id );
 	void (*close)( inode_id );
+	int (*create)( inode_id, uint8_t, char *, char * );
+	vfs_directory_list * (*get_dir_list)( inode_id, vfs_directory_list * );
+	int (*mount)( inode_id, char *, uint8_t * );
+	int (*open)( inode_id );
+	int (*read)( inode_id, uint8_t *, uint64_t, uint64_t );
 	int (*stat)( inode_id, vfs_stat_data *stat_data );
+	int (*write)( inode_id, uint8_t *, uint64_t, uint64_t );
 } vfs_operations;
 
 /**
@@ -135,6 +145,10 @@ typedef struct {
 	void *next_fs; 			// used in vfs code to link to the next FS
 } vfs_filesystem;
 
+/**
+ * @brief Cache item
+ * 
+ */
 typedef struct {
 	uint64_t address;
 	uint32_t size;
@@ -147,35 +161,41 @@ typedef struct {
 	void *next;
 } vfs_cache_item;
 
+/**
+ * @brief List of cache items
+ * 
+ */
 typedef struct {
 	vfs_cache_item *head;
 	vfs_cache_item *tail;
 } vfs_cache_list;
 
+// Initalizations
 int vfs_initalize( void );
+
+// File system management
 int vfs_register_fs( vfs_filesystem **fs );
 vfs_filesystem *vfs_get_fs( uint8_t fs_type );
-int vfs_mount( uint8_t fs_type, uint8_t *data, char *path );
+
+// File system operations
+int vfs_close( inode_id id );
 int vfs_create( uint8_t type, char *path, char *name );
-int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
-int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list );
 int vfs_mkdir( inode_id parent, char *path, char *name );
+int vfs_mount( uint8_t fs_type, uint8_t *data, char *path );
 int vfs_open( inode_id id );
+int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
 int vfs_stat( inode_id id, vfs_stat_data *stat );
+int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset );
+
+// Inode management
 inode_id vfs_lookup_inode( char *pathname );
 vfs_inode *vfs_lookup_inode_ptr( char *pathname );
 vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id );
 vfs_inode *vfs_allocate_inode( void );
-vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list );
 inode_id vfs_get_from_dir( inode_id id, char *name );
 
-void vfs_test_ramfs( void );
-void vfs_test_afs( void );
-void vfs_test_create_file( char *path, char *name, uint8_t *data, uint64_t size );
-void vfs_test_create_dir( char *path, char *name );
-void vfs_test_ls( char *path );
-void vfs_test_cat( char *pathname );
-
+// Cache management
 void vfs_cache_initalize( void );
 vfs_cache_item *vfs_cache_is_cached( uint64_t addr, uint32_t size );
 bool vfs_cache_read( uint64_t addr, uint32_t size, uint8_t *data );
@@ -185,10 +205,14 @@ void vfs_cache_flush_all( void );
 void vfs_cache_diagnostic( void );
 
 #ifdef VIFS_DEV
-uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-bool vfs_disk_read_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
-bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	bool vfs_disk_read_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+
+#else
+	uint8_t *vfs_disk_read_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+	uint8_t *vfs_disk_write_or_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 #endif
 
 #ifdef __cplusplus

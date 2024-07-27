@@ -111,6 +111,83 @@ vfs_filesystem *vfs_get_fs( uint8_t fs_type ) {
 }
 
 /**
+ * @brief Closes an open file
+ * 
+ * @param id id of inode to close
+ * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_ on failure
+ */
+int vfs_close( inode_id id ) {
+	return VFS_ERROR_NONE;
+}
+
+/**
+ * @brief Creates an inode of type at path with name
+ * 
+ * @param type 
+ * @param path 
+ * @param name 
+ * @return int inode di that was created (greater than 0), VFS_ERROR_ on failure
+ */
+int vfs_create( uint8_t type, char *path, char *name ) {
+	vfs_inode *parent_node = vfs_lookup_inode_ptr( path );
+
+	if( parent_node == NULL ) {
+		//vfs_debugf( "Cannot find path \"%s\"", path );
+		return VFS_ERROR_PATH_NOT_FOUND;
+	}
+
+	if( parent_node->type != VFS_INODE_TYPE_DIR ) {
+		vfs_debugf( "Cannot create at \"%s\", not a directory.\n", path );
+		return VFS_ERROR_NOT_A_DIRECTORY;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( parent_node->fs_type );
+
+	if( fs == NULL ) {
+		return VFS_ERROR_UNKNOWN_FS;
+	}
+
+	return fs->op.create( parent_node->id, type, path, name );
+}
+
+/**
+ * @brief Returns each file in the provided directory
+ * 
+ * @param id 
+ * @param list 
+ * @return vfs_directory_list* Pointer to list, NULL on failure
+ */
+vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list ) {
+	vfs_inode *dir = vfs_lookup_inode_ptr_by_id( id );
+
+	if( dir == NULL ) {
+		//vfs_debugf( "could not find inode %ld for directory listing.\n", id );
+		return NULL;
+	}
+
+	if( dir->type != VFS_INODE_TYPE_DIR ) {
+		//vfs_debugf( "indoe ID %ld is not a directory.\n", id );
+		return NULL;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( dir->fs_type );
+
+	return fs->op.get_dir_list( id, list );
+}
+
+/**
+ * @brief Creates a diretory
+ * 
+ * @param parent 
+ * @param path 
+ * @param name 
+ * @return int inode id on success, VFS_ERROR_ on failure
+ */
+int vfs_mkdir( inode_id parent, char *path, char *name ) {
+	return vfs_create( VFS_INODE_TYPE_DIR, path, name );
+}
+
+/**
  * @brief Mounts a file system at the given location
  * 
  * @param fs_type 
@@ -148,6 +225,99 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 }
 
 /**
+ * @brief Opens a file
+ * 
+ * @param id 
+ * @return 0 on success, VFS_ERROR_ on failure
+ */
+int vfs_open( inode_id id ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		return VFS_ERROR_FILE_NOT_FOUND;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	if( fs == NULL ) {
+		return VFS_ERROR_UNKNOWN_FS;
+	}
+
+	return fs->op.open( id );
+}
+
+/**
+ * @brief Reads size bytes from inode id + offset into data
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset
+ * @return int 
+ */
+int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		//vfs_debugf( "inode ID %ld not found, aborting read.\n", id );
+		return VFS_ERROR_FILE_NOT_FOUND;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	return fs->op.read( id, data, size, offset );
+}
+
+/**
+ * @brief Get statistics on an inode
+ * 
+ * @param id inode id to stat
+ * @param stat_data Pointer to already allocated vfs_stat_data struct
+ * @return int VFS_ERROR_NONE on succcess, VFS_ERROR_ on failure
+ */
+int vfs_stat( inode_id id, vfs_stat_data *stat_data ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		return VFS_ERROR_FILE_NOT_FOUND;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	if( fs == NULL ) {
+		return VFS_ERROR_UNKNOWN_FS;
+	}
+
+	return fs->op.stat( id, stat_data );
+}
+
+/**
+ * @brief Writes data to inode id startign at offset for size bytes
+ * 
+ * @param id 
+ * @param data 
+ * @param size 
+ * @param offset 
+ * @return int number of bytes written, -1 if error
+ */
+int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
+	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
+
+	if( node == NULL ) {
+		//vfs_debugf( "inode ID %ld not found, aborting write.\n", id );
+		return VFS_ERROR_FILE_NOT_FOUND;
+	}
+
+	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
+
+	if( fs == NULL ) {
+		return VFS_ERROR_UNKNOWN_FS;
+	}
+
+	return fs->op.write( id, data, size, offset );
+}
+
+/**
  * @brief Gets the inode id of path
  * 
  * @param path 
@@ -161,29 +331,6 @@ inode_id vfs_lookup_inode( char *pathname ) {
 	}
 	
 	return 0;
-}
-
-/**
- * @brief Gets inode structure from inode id
- * 
- * @param id 
- * @return vfs_inode* Pointer to inode structure on success, NULL on failure
- */
-vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id ) {
-	vfs_inode *ret_val = NULL;
-	bool found = false;
-	vfs_inode *head = &root_inode;
-
-	do {
-		if( head->id == id ) {
-			ret_val = head;
-			found = true;
-		}
-
-		head = head->next_inode;
-	} while( head != NULL && !found );
-
-	return ret_val;
 }
 
 /**
@@ -252,6 +399,30 @@ vfs_inode *vfs_lookup_inode_ptr( char *pathname ) {
 }
 
 /**
+ * @brief Gets inode structure from inode id
+ * 
+ * @param id 
+ * @return vfs_inode* Pointer to inode structure on success, NULL on failure
+ */
+vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id ) {
+	vfs_inode *ret_val = NULL;
+	bool found = false;
+	vfs_inode *head = &root_inode;
+
+	do {
+		if( head->id == id ) {
+			ret_val = head;
+			found = true;
+		}
+
+		head = head->next_inode;
+	} while( head != NULL && !found );
+
+	return ret_val;
+}
+
+
+/**
  * @brief Create a new inode for use
  * 
  * @return vfs_inode* Pointer to inode structure on success, NULL on failure
@@ -268,166 +439,6 @@ vfs_inode *vfs_allocate_inode( void ) {
 	inode_index_tail = node;
 
 	return node;
-}
-
-/**
- * @brief Creates an inode of type at path with name
- * 
- * @param type 
- * @param path 
- * @param name 
- * @return int inode di that was created (greater than 0), VFS_ERROR_ on failure
- */
-int vfs_create( uint8_t type, char *path, char *name ) {
-	vfs_inode *parent_node = vfs_lookup_inode_ptr( path );
-
-	if( parent_node == NULL ) {
-		//vfs_debugf( "Cannot find path \"%s\"", path );
-		return VFS_ERROR_PATH_NOT_FOUND;
-	}
-
-	if( parent_node->type != VFS_INODE_TYPE_DIR ) {
-		vfs_debugf( "Cannot create at \"%s\", not a directory.\n", path );
-		return VFS_ERROR_NOT_A_DIRECTORY;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( parent_node->fs_type );
-
-	if( fs == NULL ) {
-		return VFS_ERROR_UNKNOWN_FS;
-	}
-
-	return fs->op.create( parent_node->id, type, path, name );
-}
-
-/**
- * @brief Writes data to inode id startign at offset for size bytes
- * 
- * @param id 
- * @param data 
- * @param size 
- * @param offset 
- * @return int number of bytes written, -1 if error
- */
-int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
-	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
-
-	if( node == NULL ) {
-		//vfs_debugf( "inode ID %ld not found, aborting write.\n", id );
-		return VFS_ERROR_FILE_NOT_FOUND;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
-
-	if( fs == NULL ) {
-		return VFS_ERROR_UNKNOWN_FS;
-	}
-
-	return fs->op.write( id, data, size, offset );
-}
-
-/**
- * @brief Reads size bytes from inode id + offset into data
- * 
- * @param id 
- * @param data 
- * @param size 
- * @param offset
- * @return int 
- */
-int vfs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
-	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
-
-	if( node == NULL ) {
-		//vfs_debugf( "inode ID %ld not found, aborting read.\n", id );
-		return VFS_ERROR_FILE_NOT_FOUND;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
-
-	return fs->op.read( id, data, size, offset );
-}
-
-/**
- * @brief Creates a diretory
- * 
- * @param parent 
- * @param path 
- * @param name 
- * @return int inode id on success, VFS_ERROR_ on failure
- */
-int vfs_mkdir( inode_id parent, char *path, char *name ) {
-	return vfs_create( VFS_INODE_TYPE_DIR, path, name );
-}
-
-/**
- * @brief Opens a file
- * 
- * @param id 
- * @return 0 on success, VFS_ERROR_ on failure
- */
-int vfs_open( inode_id id ) {
-	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
-
-	if( node == NULL ) {
-		return VFS_ERROR_FILE_NOT_FOUND;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
-
-	if( fs == NULL ) {
-		return VFS_ERROR_UNKNOWN_FS;
-	}
-
-	return fs->op.open( id );
-}
-
-/**
- * @brief Get statistics on an inode
- * 
- * @param id inode id to stat
- * @param stat_data Pointer to already allocated vfs_stat_data struct
- * @return int VFS_ERROR_NONE on succcess, VFS_ERROR_ on failure
- */
-int vfs_stat( inode_id id, vfs_stat_data *stat_data ) {
-	vfs_inode *node = vfs_lookup_inode_ptr_by_id( id );
-
-	if( node == NULL ) {
-		return VFS_ERROR_FILE_NOT_FOUND;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
-
-	if( fs == NULL ) {
-		return VFS_ERROR_UNKNOWN_FS;
-	}
-
-	return fs->op.stat( id, stat_data );
-}
-
-/**
- * @brief Returns each file in the provided directory
- * 
- * @param id 
- * @param list 
- * @return vfs_directory_list* Pointer to list, NULL on failure
- */
-vfs_directory_list *vfs_get_directory_list( inode_id id, vfs_directory_list *list ) {
-	vfs_inode *dir = vfs_lookup_inode_ptr_by_id( id );
-
-	if( dir == NULL ) {
-		//vfs_debugf( "could not find inode %ld for directory listing.\n", id );
-		return NULL;
-	}
-
-	if( dir->type != VFS_INODE_TYPE_DIR ) {
-		//vfs_debugf( "indoe ID %ld is not a directory.\n", id );
-		return NULL;
-	}
-
-	vfs_filesystem *fs = vfs_get_fs( dir->fs_type );
-
-	return fs->op.get_dir_list( id, list );
 }
 
 /**
@@ -448,6 +459,27 @@ inode_id vfs_get_from_dir( inode_id parent_id, char *name ) {
 	}
 
 	return VFS_ERROR_FILE_NOT_FOUND;
+}
+
+/**
+ * @brief Initalizes the vfs cache
+ * 
+ */
+void vfs_cache_initalize( void ) {
+	cache.head = NULL;
+	cache.tail = NULL;
+	cache_hits = 0;
+	cache_misses = 0;
+	cache_read_success = 0;
+	cache_read_fail = 0;
+	cache_write_success = 0;
+	cache_write_fail = 0;
+	cache_write_old = 0;
+	cache_write_new = 0;
+	cache_total_in = 0;
+	cache_total_out = 0;
+	cache_disk_read_calls = 0;
+	cache_disk_write_calls = 0;
 }
 
 /**
@@ -586,14 +618,27 @@ bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty ) 
 	return false;
 }
 
+/**
+ * @brief Flushes the given cache block to disk
+ * 
+ * @param ci 
+ * @return true Successful flush
+ * @return false Flush failure
+ */
 bool vfs_cache_flush( vfs_cache_item *ci ) {
 	if( ci->dirty == true ) {
 		vfs_disk_write_test_no_cache( 0, ci->address, ci->size, ci->data );
 
 		ci->dirty = false;
 	}
+
+	return true;
 }
 
+/**
+ * @brief Flush all cache items to disk
+ * 
+ */
 void vfs_cache_flush_all( void ) {
 	vfs_cache_item *ci = cache.head;
 
@@ -609,26 +654,9 @@ void vfs_cache_flush_all( void ) {
 }
 
 /**
- * @brief Initalizes the vfs cache
+ * @brief Display cache diagnostic data
  * 
  */
-void vfs_cache_initalize( void ) {
-	cache.head = NULL;
-	cache.tail = NULL;
-	cache_hits = 0;
-	cache_misses = 0;
-	cache_read_success = 0;
-	cache_read_fail = 0;
-	cache_write_success = 0;
-	cache_write_fail = 0;
-	cache_write_old = 0;
-	cache_write_new = 0;
-	cache_total_in = 0;
-	cache_total_out = 0;
-	cache_disk_read_calls = 0;
-	cache_disk_write_calls = 0;
-}
-
 void vfs_cache_diagnostic( void ) {
 	uint64_t total_size = 0;
 	uint64_t total_objects = 0;

@@ -8,7 +8,8 @@
 		"files.associations": {
 			"stdint.h": "c",
 			"dirent.h": "c",
-			"rfs.h": "c"
+			"rfs.h": "c",
+			"cstdint": "c"
 		}
 	},
 	"launch": {
