@@ -532,12 +532,33 @@ bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty ) 
 		cache_write_success++;
 		cache_write_new++;
 		cache_total_in = cache_total_in + size;
-		vfs_debugf( "write size: %d\n", size );
 		return true;
 	}
 
 	cache_write_fail++;
 	return false;
+}
+
+bool vfs_cache_flush( vfs_cache_item *ci ) {
+	if( ci->dirty == true ) {
+		vfs_disk_write_test_no_cache( 0, ci->address, ci->size, ci->data );
+
+		ci->dirty = false;
+	}
+}
+
+void vfs_cache_flush_all( void ) {
+	vfs_cache_item *ci = cache.head;
+
+	if( ci == NULL ) {
+		return;
+	}
+
+	do {
+		vfs_cache_flush( ci );
+
+		ci = ci->next;
+	} while( ci != NULL );
 }
 
 /**
@@ -624,17 +645,34 @@ uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, u
 		return data;
 	}
 
+	if( vfs_disk_read_no_cache( drive, offset, length, data ) == true ) {
+		vfs_cache_write( offset, length, data, false );
+	}
+
+	return data;
+}
+
+/**
+ * @brief Read directly from the disk, bypassing cache
+ * 
+ * @param drive 
+ * @param offset 
+ * @param length 
+ * @param data 
+ * @return true 
+ * @return false 
+ */
+bool vfs_disk_read_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
 	fseek( fp, offset, SEEK_SET );
 	
 	int read_err = fread( data, length, 1, fp );
 
 	if( read_err != 1 ) {
 		vfs_debugf( "vfs_disk_read_test: fread failed.\n" );
-	} else {
-		vfs_cache_write( offset, length, data, false );
+		return false;
 	}
 
-	return data;
+	return true;
 }
 
 /**
@@ -653,17 +691,34 @@ uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, 
 		return data;
 	}
 
+	vfs_disk_write_test_no_cache( drive, offset, length, data );
+
+	return data;
+}
+
+/**
+ * @brief Write directly to the disk, bypassing cache
+ * 
+ * @param drive 
+ * @param offset 
+ * @param length 
+ * @param data 
+ * @return true 
+ * @return false 
+ */
+bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
 	fseek( fp, offset, SEEK_SET );
 
 	int write_err = fwrite( data, length, 1, fp );
 
 	if( write_err != 1 ) {
 		vfs_debugf( "vfs_disk_write_test: fwrite failed.\n" );
+		return false;
 	}
 
 	fflush(fp);
 
-	return data;
+	return true;
 }
 
 #else

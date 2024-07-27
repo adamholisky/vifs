@@ -138,9 +138,11 @@ int main( int argc, char *argv[] ) {
 	switch( command ) {
 		case COMMAND_CP:
 			vifs_cp( param_1, param_2 );
+			vfs_cache_flush_all();
 			break;
 		case COMMAND_CPDIR:
 			vifs_cpdir( param_1, param_2 );
+			vfs_cache_flush_all();
 			break;
 		case COMMAND_BOOTSTRAP:
 			if( afs_img == NULL ) {
@@ -148,6 +150,8 @@ int main( int argc, char *argv[] ) {
 			} else {
 				vifs_bootstrap( param_1, afs_img );
 			}
+
+			vfs_cache_flush_all();
 			break;
 		case COMMAND_RUN_OS_TESTS:
 			vifs_run_os_tests();
@@ -160,6 +164,7 @@ int main( int argc, char *argv[] ) {
 			break;
 		case COMMAND_MKDIR:
 			vifs_mkdir( param_1 );
+			vfs_cache_flush_all();
 			break;
 		case COMMAND_CAT:
 			vifs_cat( param_1 );

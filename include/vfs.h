@@ -24,7 +24,9 @@ extern "C"
 	#define vfs_panic printf
 	#define vfs_debugf printf
 	#define vfs_disk_read vfs_disk_read_test
+	#define vfs_disk_read_no_cache vfs_disk_read_test_no_cache
 	#define vfs_disk_write vfs_disk_write_test
+	#define vfs_disk_write_no_cache vfs_disk_write_test_no_cache
 #else
 	#include <kernel_common.h>
 	#include <ahci.h>
@@ -170,11 +172,15 @@ void vfs_cache_initalize( void );
 vfs_cache_item *vfs_cache_is_cached( uint64_t addr, uint32_t size );
 bool vfs_cache_read( uint64_t addr, uint32_t size, uint8_t *data );
 bool vfs_cache_write( uint64_t addr, uint32_t size, uint8_t *data, bool dirty );
+bool vfs_cache_flush( vfs_cache_item *ci );
+void vfs_cache_flush_all( void );
 void vfs_cache_diagnostic( void );
 
 #ifdef VIFS_DEV
 uint8_t *vfs_disk_read_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+bool vfs_disk_read_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 uint8_t *vfs_disk_write_test( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
+bool vfs_disk_write_test_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data );
 #endif
 
 #ifdef __cplusplus
