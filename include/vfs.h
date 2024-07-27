@@ -52,6 +52,14 @@ typedef uint64_t inode_id;
 #define VFS_INODE_TYPE_DIR 2
 
 #define VFS_ERROR_NONE 0
+#define VFS_ERROR_UNKNOWN -1
+#define VFS_ERROR_MEMORY -2
+#define VFS_ERROR_PATH_NOT_FOUND -3
+#define VFS_ERROR_OBJECT_ALREADY_IN_USE -4
+#define VFS_ERROR_NOT_A_DIRECTORY -5
+#define VFS_ERROR_NOT_A_FILE -6
+#define VFS_ERROR_UNKNOWN_FS -7
+#define VFS_ERROR_FILE_NOT_FOUND -8
 
 typedef struct {
 	uint64_t pos;   // Position of read/write head
@@ -145,7 +153,7 @@ typedef struct {
 } vfs_cache_list;
 
 int vfs_initalize( void );
-vfs_filesystem *vfs_register_fs( vfs_filesystem *fs );
+int vfs_register_fs( vfs_filesystem **fs );
 vfs_filesystem *vfs_get_fs( uint8_t fs_type );
 int vfs_mount( uint8_t fs_type, uint8_t *data, char *path );
 int vfs_create( uint8_t type, char *path, char *name );

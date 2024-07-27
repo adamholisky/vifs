@@ -16,12 +16,17 @@ inode_id afs_id_top;
  * 
  * @param drive_size_in_bytes 
  * @param data_root 
- * @return int 
+ * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_ on failure
  */
 int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 	vfs_filesystem *afs;
 
-	afs = vfs_register_fs( afs );
+	int reg_err = vfs_register_fs( &afs );
+
+	if( reg_err != 0 ) {
+		vfs_debugf( "Register FS error: %d\n", reg_err );
+		return reg_err;
+	}
 
 	afs->type = FS_TYPE_AFS;
 	afs->op.mount = afs_mount;
@@ -37,7 +42,7 @@ int afs_initalize( uint64_t drive_size_in_bytes, uint8_t *data_root ) {
 
 	afs_inodes_tail = &afs_inodes;
 
-	return 0;
+	return VFS_ERROR_NONE;
 }
 
 /**
@@ -71,7 +76,7 @@ uint8_t *afs_write_block( uint32_t block_id, uint64_t size, uint8_t *data ) {
  * @brief Writes meta data for block_id to disk
  * 
  * @param block_id 
- * @return int 
+ * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_
  */
 int afs_write_meta( uint32_t block_id ) {
 	uint64_t offset = sizeof(afs_drive);
@@ -79,7 +84,7 @@ int afs_write_meta( uint32_t block_id ) {
 
 	vfs_disk_write( 0, offset, sizeof(afs_block_meta_data), (uint8_t *)&block_meta_data[block_id] );
 
-	return 1;
+	return VFS_ERROR_NONE;
 }
 
 /**
@@ -87,13 +92,13 @@ int afs_write_meta( uint32_t block_id ) {
  * 
  * @param block_id 
  * @param dir 
- * @return int 
+ * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_
  */
 int afs_write_directory( uint32_t block_id, afs_block_directory *dir ) {
 	uint64_t offset = drive->block_size * (block_id);
 	vfs_disk_write( 0, offset, sizeof(afs_block_directory), (uint8_t *)dir );
 
-	return 1;
+	return VFS_ERROR_NONE;
 }
 
 /**
@@ -101,12 +106,12 @@ int afs_write_directory( uint32_t block_id, afs_block_directory *dir ) {
  * 
  * @param block_id 
  * @param dir 
- * @return int 
+ * @return int VFS_ERROR_NONE on success, otherwise VFS_ERROR_
  */
 int afs_write_drive_info( afs_drive *drive_info ) {
 	vfs_disk_write( 0, 0, sizeof(afs_drive), (uint8_t *)drive_info );
 
-	return 1;
+	return VFS_ERROR_NONE;
 }
 
 
@@ -116,7 +121,7 @@ int afs_write_drive_info( afs_drive *drive_info ) {
  * @param id 
  * @param path 
  * @param data_root 
- * @return int 
+ * @return int VFS_ERROR_NONE if successful, otherwise VFS_ERROR_
  */
 int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
 	afs_data_root = data_root;
@@ -127,15 +132,25 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
 	afs_inodes_tail->next = NULL;
 
 	afs_root_dir = vfs_malloc( sizeof(afs_block_directory) );
+
+	if( afs_root_dir == NULL ) {
+		return VFS_ERROR_MEMORY;
+	}
+
 	afs_root_dir = (afs_block_directory *)afs_read_block(drive->root_directory, sizeof(afs_block_directory), (uint8_t *)afs_root_dir);
 
 	uint32_t length_of_block_meta = drive->block_count * sizeof(afs_block_meta_data);
 	block_meta_data = vfs_malloc( length_of_block_meta );
+
+	if( block_meta_data == NULL ) {
+		return VFS_ERROR_MEMORY;
+	}
+
 	block_meta_data = (afs_block_meta_data *)vfs_disk_read( 1, sizeof(afs_drive), length_of_block_meta, (uint8_t *)block_meta_data );
 
 	afs_load_directory_as_inodes( id, afs_root_dir );
 
-	return 0;
+	return VFS_ERROR_NONE;
 }
 
 /**
@@ -145,14 +160,14 @@ int afs_mount( inode_id id, char *path, uint8_t *data_root ) {
  * @param data 
  * @param size 
  * @param offset 
- * @return int 
+ * @return int number of bytes read, otherwise VFS_ERROR_
  */
 int afs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	afs_inode *inode = afs_lookup_by_inode_id( id );
 
 	if( inode == NULL ) {
-		vfs_debugf( "read: inode returned NULL. Aborting.\n" );
-		return 0;
+		//vfs_debugf( "read: inode returned NULL. Aborting.\n" );
+		return VFS_ERROR_FILE_NOT_FOUND;
 	}
 
 	uint64_t final_offset = inode->block_id * drive->block_size;
@@ -170,7 +185,7 @@ int afs_read( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
  * @param type 
  * @param path 
  * @param name 
- * @return int 
+ * @return int inode id on success (greater than 0), otherwise VFS_ERROR_ on failure
  */
 int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 	afs_inode *parent_inode = afs_lookup_by_inode_id( parent );
@@ -250,16 +265,14 @@ int afs_create( inode_id parent, uint8_t type, char *path, char *name ) {
  * @param data 
  * @param size 
  * @param offset 
- * @return int 
- * 
- * 
+ * @return int number of bytes written
  */
 int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	afs_inode *node = afs_lookup_by_inode_id( id );
 
 	if( block_meta_data[node->block_id].block_type != AFS_BLOCK_TYPE_FILE ) {
-		vfs_debugf( "Block is not a file.\n" );
-		return 0;
+		//vfs_debugf( "Block is not a file.\n" );
+		return VFS_ERROR_NOT_A_FILE;
 	}
 
 	// TODO: Current assumes we're only writing full files starting at offset 0
@@ -281,7 +294,7 @@ int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 	afs_write_drive_info( drive );
 	vfs_disk_write( 0, drive->block_size * node->block_id, size, data );
 
-	return 0;
+	return size;
 }
 
 
@@ -290,7 +303,7 @@ int afs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
  * 
  * @param parent_inode 
  * @param dir 
- * @return int 0 on success, other error code
+ * @return int VFS_ERROR_NONE on success, other error code
  */
 int afs_load_directory_as_inodes( inode_id parent_inode, afs_block_directory *dir ) {
 	for( int i = 0; i < dir->next_index; i++ ) {
@@ -298,14 +311,14 @@ int afs_load_directory_as_inodes( inode_id parent_inode, afs_block_directory *di
 		afs_load_block_as_inode( &block_meta_data[dir->index[i]] );
 	}
 
-	return 0;
+	return VFS_ERROR_NONE;
 }
 
 /**
  * @brief Load the given block as a vfs_inode, if it hasn't been done already
  * 
  * @param meta 
- * @return int vfs inode id
+ * @return int vfs inode id on success, 0 on failure
  */
 int afs_load_block_as_inode( afs_block_meta_data *meta ) {
 	inode_id ret_val = 0;
@@ -370,18 +383,18 @@ inode_id afs_find_inode_from_block_id( uint32_t block_id ) {
  * 
  * @param id 
  * @param list 
- * @return vfs_directory_list* 
+ * @return vfs_directory_list* directory list on success, NULL on failure
  */
 vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list ) {
 	afs_inode *afs_ino = afs_lookup_by_inode_id( id );
 
 	if( afs_ino == NULL ) {
-		vfs_debugf( "afs inode not found.\n" );
+		//vfs_debugf( "afs inode not found.\n" );
 		return NULL;
 	}
 
 	if( block_meta_data[afs_ino->block_id].block_type != AFS_BLOCK_TYPE_DIRECTORY ) {
-		vfs_debugf( "afs inode is not a direcotry.\n" );
+		//vfs_debugf( "afs inode is not a direcotry.\n" );
 		return NULL;
 	}
 
@@ -406,10 +419,10 @@ vfs_directory_list *afs_dir_list( inode_id id, vfs_directory_list *list ) {
 }
 
 /**
- * @brief 
+ * @brief Lookup an afs_inode by VFS inode id
  * 
- * @param id 
- * @return rfs_file* 
+ * @param id VFS inode id
+ * @return afs_file* Pointer to the AFS inode struct, NULL on failure
  */
 afs_inode *afs_lookup_by_inode_id( inode_id id ) {
 	afs_inode *inode = &afs_inodes;
@@ -431,46 +444,108 @@ afs_inode *afs_lookup_by_inode_id( inode_id id ) {
 }
 
 /**
- * @brief 
+ * @brief Opens the inode id for use
  * 
  * @param id 
- * @return int 
+ * @return int 0 on success, VFS_ERROR_ on failure
  */
 int afs_open( inode_id id ) {
 	afs_inode *inode = afs_lookup_by_inode_id( id );
 
 	if( inode == NULL ) {
-		return 0;
+		return VFS_ERROR_FILE_NOT_FOUND;
 	}
 
 	inode->open = true;
 
-	return 1;
+	return VFS_ERROR_NONE;
 }
 
 /**
- * @brief 
+ * @brief Returns stats on given inode
  * 
- * @param id 
- * @param stat 
- * @return int 
+ * @param id id of inode
+ * @param stat pointer to already allocated vfs_stat_data struct
+ * @return int VFS_ERROR_NONE on success, VFS_ERROR_ on failure
  */
 int afs_stat( inode_id id, vfs_stat_data *stat ) {
 	afs_inode *inode = afs_lookup_by_inode_id( id );
 
 	if( inode == NULL ) {
-		return 0;
+		return VFS_ERROR_FILE_NOT_FOUND;
 	}
 
 	stat->size = block_meta_data[ inode->block_id ].file_size;
 
-	return 1;
+	return VFS_ERROR_NONE;
 }
 
+/**
+ * @brief Displays diagnostic data about the drive
+ * 
+ */
+void afs_dump_diagnostic_data( void ) {
+	//vfs_debugf( "    \n", dd_drive-> );
 
+	// Drive Info
+	afs_drive *dd_drive = vfs_malloc( sizeof(afs_drive) );
+	vfs_disk_read( 0, 0, sizeof(afs_drive), (uint8_t *)dd_drive );
+	vfs_debugf( "afs_drive:\n" );
+	vfs_debugf( "    magic: \"%c%c%c%c\"\n", dd_drive->magic[0], dd_drive->magic[1], dd_drive->magic[2], dd_drive->magic[3]);
+	vfs_debugf( "    version: %d\n", dd_drive->version );
+	vfs_debugf( "    size: %ld\n", dd_drive->size );
+	vfs_debugf( "    block_size: %d\n", dd_drive->block_size );
+	vfs_debugf( "    block_count: %d\n", dd_drive->block_count );
+	vfs_debugf( "    root_directory: %d\n", dd_drive->root_directory );
+	vfs_debugf( "    next_free: %d\n", dd_drive->next_free );
+	vfs_debugf( "\n" );
 
+	// Meta data 
+	afs_block_meta_data *dd_meta_data = vfs_malloc( sizeof(afs_block_meta_data) );
+	for( int i = 0; i < dd_drive->block_count; i++ ) {
+		uint64_t offset = sizeof(afs_drive) + (sizeof(afs_block_meta_data) * i );
+		vfs_disk_read( 0, offset, sizeof(afs_block_meta_data), (uint8_t *)dd_meta_data );
 
+		if( dd_meta_data->in_use == true && dd_meta_data->block_type != AFS_BLOCK_TYPE_META && dd_meta_data->file_size != 0 ) {
+			vfs_debugf( "afs_block_meta_data for block %d\n", dd_meta_data->id );
+			vfs_debugf( "    block_type: %d\n", dd_meta_data->block_type );
+			vfs_debugf( "    name: \"%s\"\n", dd_meta_data->name );
 
+			if( dd_meta_data->block_type == AFS_BLOCK_TYPE_FILE ) {
+				vfs_debugf( "    starting_block: %d\n", dd_meta_data->starting_block );
+				vfs_debugf( "    size: %d\n", dd_meta_data->file_size );
+				vfs_debugf( "    num_blocks: %d (expected: %d)\n", dd_meta_data->num_blocks, 1 + (dd_meta_data->file_size / dd_drive->block_size) );
+			}
+		}
+	}
+	vfs_debugf( "\n" );
+
+	// Root Directory
+	afs_block_directory *dd_root_dir = vfs_malloc( sizeof(afs_block_directory) );
+	vfs_disk_read( 0, dd_drive->block_size * dd_drive->root_directory, sizeof(afs_block_directory), (uint8_t *)dd_root_dir );
+	vfs_debugf( "Root Directory:\n" );
+	vfs_debugf( "    type: %d\n", dd_root_dir->type );
+	vfs_debugf( "    next_index: %d\n", dd_root_dir->next_index );
+	
+	for( int i = 0; i < dd_root_dir->next_index; i++ ) {
+		if( dd_root_dir->index[i] != 0 ) {
+			vfs_debugf( "    index[%d] = %d\n", i, dd_root_dir->index[i] );
+		}
+	}
+	vfs_debugf( "\n" );
+}
+
+/**********************************************/
+/* Everything below here for vifs dev tooling */
+/**********************************************/
+
+#ifdef VIFS_DEV
+/**
+ * @brief Boostrap function for vifs tool
+ * 
+ * @param fp 
+ * @param size 
+ */
 void afs_bootstrap( FILE *fp, uint64_t size ) {
 	afs_drive bs_drive;
 
@@ -539,54 +614,4 @@ bool afs_bootstrap_write( FILE *fp, void *data, uint64_t size ) {
 
 	return true;
 }
-
-void afs_dump_diagnostic_data( void ) {
-	//vfs_debugf( "    \n", dd_drive-> );
-
-	// Drive Info
-	afs_drive *dd_drive = vfs_malloc( sizeof(afs_drive) );
-	vfs_disk_read( 0, 0, sizeof(afs_drive), (uint8_t *)dd_drive );
-	vfs_debugf( "afs_drive:\n" );
-	vfs_debugf( "    magic: \"%c%c%c%c\"\n", dd_drive->magic[0], dd_drive->magic[1], dd_drive->magic[2], dd_drive->magic[3]);
-	vfs_debugf( "    version: %d\n", dd_drive->version );
-	vfs_debugf( "    size: %ld\n", dd_drive->size );
-	vfs_debugf( "    block_size: %d\n", dd_drive->block_size );
-	vfs_debugf( "    block_count: %d\n", dd_drive->block_count );
-	vfs_debugf( "    root_directory: %d\n", dd_drive->root_directory );
-	vfs_debugf( "    next_free: %d\n", dd_drive->next_free );
-	vfs_debugf( "\n" );
-
-	// Meta data 
-	afs_block_meta_data *dd_meta_data = vfs_malloc( sizeof(afs_block_meta_data) );
-	for( int i = 0; i < dd_drive->block_count; i++ ) {
-		uint64_t offset = sizeof(afs_drive) + (sizeof(afs_block_meta_data) * i );
-		vfs_disk_read( 0, offset, sizeof(afs_block_meta_data), (uint8_t *)dd_meta_data );
-
-		if( dd_meta_data->in_use == true && dd_meta_data->block_type != AFS_BLOCK_TYPE_META && dd_meta_data->file_size != 0 ) {
-			vfs_debugf( "afs_block_meta_data for block %d\n", dd_meta_data->id );
-			vfs_debugf( "    block_type: %d\n", dd_meta_data->block_type );
-			vfs_debugf( "    name: \"%s\"\n", dd_meta_data->name );
-
-			if( dd_meta_data->block_type == AFS_BLOCK_TYPE_FILE ) {
-				vfs_debugf( "    starting_block: %d\n", dd_meta_data->starting_block );
-				vfs_debugf( "    size: %d\n", dd_meta_data->file_size );
-				vfs_debugf( "    num_blocks: %d (expected: %d)\n", dd_meta_data->num_blocks, 1 + (dd_meta_data->file_size / dd_drive->block_size) );
-			}
-		}
-	}
-	vfs_debugf( "\n" );
-
-	// Root Directory
-	afs_block_directory *dd_root_dir = vfs_malloc( sizeof(afs_block_directory) );
-	vfs_disk_read( 0, dd_drive->block_size * dd_drive->root_directory, sizeof(afs_block_directory), (uint8_t *)dd_root_dir );
-	vfs_debugf( "Root Directory:\n" );
-	vfs_debugf( "    type: %d\n", dd_root_dir->type );
-	vfs_debugf( "    next_index: %d\n", dd_root_dir->next_index );
-	
-	for( int i = 0; i < dd_root_dir->next_index; i++ ) {
-		if( dd_root_dir->index[i] != 0 ) {
-			vfs_debugf( "    index[%d] = %d\n", i, dd_root_dir->index[i] );
-		}
-	}
-	vfs_debugf( "\n" );
-}
+#endif

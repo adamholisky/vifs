@@ -91,11 +91,11 @@ typedef struct {
 } __attribute__((packed)) afs_block_meta_data;
 
 typedef struct {
-	uint8_t		data[AFS_DEFAULT_BLOCK_SIZE];
+	uint8_t		data[ AFS_DEFAULT_BLOCK_SIZE ];
 } __attribute__((packed)) afs_generic_block;
 
 typedef struct {
-	uint8_t data[ AFS_DEFAULT_BLOCK_SIZE ];
+	uint8_t 	data[ AFS_DEFAULT_BLOCK_SIZE ];
 } __attribute__((packed)) afs_file;
 
 typedef struct {
