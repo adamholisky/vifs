@@ -27,6 +27,7 @@ extern "C"
 	#define vfs_disk_read_no_cache vfs_disk_read_test_no_cache
 	#define vfs_disk_write vfs_disk_write_test
 	#define vfs_disk_write_no_cache vfs_disk_write_test_no_cache
+	#define vfs_strlen strlen
 #else
 	#include <kernel_common.h>
 	#include <kmemory.h>
@@ -37,6 +38,7 @@ extern "C"
 	#define vfs_free kfree
 	#define vfs_panic debugf
 	#define vfs_debugf debugf
+	#define vfs_strlen kstrlen
 #endif
 
 typedef uint64_t inode_id;

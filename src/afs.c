@@ -46,7 +46,7 @@ int afs_initalize( void ) {
  * @return uint8_t* 
  */
 uint8_t *afs_read_block( uint32_t block_id, uint64_t size, uint8_t *data ) {
-	vfs_disk_read( 0, (block_id * drive->block_size), size, data );
+	data = vfs_disk_read( 0, (block_id * drive->block_size), size, data );
 
 	return data;
 }

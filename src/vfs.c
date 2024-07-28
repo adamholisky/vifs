@@ -341,7 +341,7 @@ inode_id vfs_lookup_inode( char *pathname ) {
  */
 vfs_inode *vfs_lookup_inode_ptr( char *pathname ) {
 	vfs_inode *ret_val = NULL;
-	uint32_t path_length = strlen( pathname );
+	uint32_t path_length = vfs_strlen( pathname );
 
 	if( strcmp( pathname, "/" ) == 0 ) {
 		return &root_inode;
@@ -813,7 +813,7 @@ uint8_t *vfs_disk_read( uint64_t drive, uint64_t offset, uint64_t length, uint8_
 }
 
 uint8_t *vfs_disk_read_no_cache( uint64_t drive, uint64_t offset, uint64_t length, uint8_t *data ) {
-	if( !ahci_read_at_byte_offset( offset, length, data ) ) {
+	if( !ahci_read_at_byte_offset_512_chunks( offset, length, data ) ) {
 		vfs_debugf( "Could not read from ahci drive.\n" );
 		return NULL;
 	}
