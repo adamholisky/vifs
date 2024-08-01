@@ -51,6 +51,9 @@ typedef uint64_t inode_id;
 
 #define VFS_INODE_TYPE_FILE 1
 #define VFS_INODE_TYPE_DIR 2
+#define VFS_INODE_TYPE_DEVICE 3
+#define VFS_INODE_TYPE_PROC 4
+#define VFS_INODE_TYPE_LINK 5
 
 #define VFS_ERROR_NONE 0
 #define VFS_ERROR_UNKNOWN -1
@@ -61,6 +64,7 @@ typedef uint64_t inode_id;
 #define VFS_ERROR_NOT_A_FILE -6
 #define VFS_ERROR_UNKNOWN_FS -7
 #define VFS_ERROR_FILE_NOT_FOUND -8
+#define VFS_ERROR_NOT_A_DEVICE -9
 
 /**
  * @brief Directory list
@@ -70,6 +74,10 @@ typedef struct {
 	inode_id id;
 	void *next_dir;
 } vfs_directory;
+
+typedef struct {
+	void *data; // Pointer to the device structure for the represented device
+} vfs_device;
 
 /**
  * @brief Inode structure, representing a file/dir/etc on disk
@@ -82,6 +90,8 @@ typedef struct {
 	inode_id id;			// inode id
 	bool is_mount_point;	// true if this is a mount point for a fs
 	vfs_directory *dir_inodes;	// used for directory listing
+
+	vfs_device *dev;		// for use if inode is a device
 
 	void *next_inode;		// for vfs management
 } vfs_inode;
@@ -134,7 +144,7 @@ typedef struct {
 	int (*mount)( inode_id, char *, uint8_t * );
 	int (*open)( inode_id );
 	int (*read)( inode_id, uint8_t *, uint64_t, uint64_t );
-	int (*stat)( inode_id, vfs_stat_data *stat_data );
+	int (*stat)( inode_id, vfs_stat_data * );
 	int (*write)( inode_id, uint8_t *, uint64_t, uint64_t );
 } vfs_operations;
 
@@ -199,6 +209,7 @@ vfs_inode *vfs_lookup_inode_ptr( char *pathname );
 vfs_inode *vfs_lookup_inode_ptr_by_id( inode_id id );
 vfs_inode *vfs_allocate_inode( void );
 inode_id vfs_get_from_dir( inode_id id, char *name );
+void *vfs_get_device_struct_from_inode_id( inode_id id );
 
 // Cache management
 void vfs_cache_initalize( void );

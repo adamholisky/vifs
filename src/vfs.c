@@ -2,6 +2,10 @@
 #include "rfs.h"
 #include "afs.h"
 
+#ifdef VIFS_OS_ENV
+#include <device.h>
+#endif
+
 #undef VFS_CACHE_DEBUG
 
 vfs_filesystem *file_systems;
@@ -206,7 +210,6 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	vfs_filesystem *fs = vfs_get_fs( fs_type );
 	vfs_inode *mount_point = NULL;
 
-	vfs_debugf("b");
 	mount_point = vfs_lookup_inode_ptr( path );
 	
 	if( mount_point == NULL ) {
@@ -225,8 +228,6 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 		vfs_debugf( "Mount point \"%s\" is not a directory.\n", path );
 		return VFS_ERROR_NOT_A_DIRECTORY;
 	}
-
-	vfs_debugf("a");
 	
 	mount_point->fs_type = fs_type;
 	mount_point->fs_id = fs_id_top++;
@@ -255,9 +256,7 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	mp_list_item->ptr = mount_point;
 	strcpy(mp_list_item->name, path);
 	mount_points.count++;
-
-	vfs_debugf("done");
-
+		
 	return fs->op.mount( mount_point->id, path, data );
 }
 
@@ -344,6 +343,14 @@ int vfs_write( inode_id id, uint8_t *data, uint64_t size, uint64_t offset ) {
 		//vfs_debugf( "inode ID %ld not found, aborting write.\n", id );
 		return VFS_ERROR_FILE_NOT_FOUND;
 	}
+
+	#ifdef VIFS_OS_ENV
+	if( node->type == VFS_INODE_TYPE_DEVICE ) {
+		device *dev = node->dev->data;
+
+		return dev->write( id, data, size, offset );
+	}
+	#endif
 
 	vfs_filesystem *fs = vfs_get_fs( node->fs_type );
 
@@ -689,6 +696,22 @@ void vfs_cache_flush_all( void ) {
 
 		ci = ci->next;
 	} while( ci != NULL );
+}
+
+void *vfs_get_device_struct_from_inode_id( inode_id id ) {
+	vfs_inode *ino = vfs_lookup_inode_ptr_by_id( id );
+
+	if( ino == NULL ) {
+		//return VFS_ERROR_FILE_NOT_FOUND;
+		return NULL;
+	}
+
+	if( ino->type != VFS_INODE_TYPE_DEVICE ) {
+		//return VFS_ERROR_NOT_A_DEVICE;
+		return NULL;
+	}
+
+	return ino->dev->data;	
 }
 
 /**

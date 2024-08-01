@@ -195,6 +195,9 @@ int rfs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 		case VFS_INODE_TYPE_FILE:
 			f->rfs_file_type = RFS_FILE_TYPE_FILE;
 			break;
+		case VFS_INODE_TYPE_DEVICE:
+			f->rfs_file_type = RFS_FILE_TYPE_DEVICE;
+			break;
 	}
 
 	// If dir, initalize the RFS dir_list
