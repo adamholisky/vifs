@@ -545,6 +545,7 @@ int vifs_run_os_tests( void ) {
 
 	// Directory for RFS
 	vfs_mkdir( 1, "/", "proc" );
+	vfs_mkdir( 1, "/", "dev" );
  
 	// Initalize RFS
 	int rfs_init_err = rfs_initalize();
@@ -562,7 +563,15 @@ int vifs_run_os_tests( void ) {
 
 		return 1;
 	}
-	vfs_debugf( "Mounted RFS.\n" );
+	vfs_debugf( "Mounted RFS /proc.\n" );
+
+	int mount_err2 = vfs_mount( FS_TYPE_RFS, NULL, "/dev" );
+	if( mount_err != 0 ) {
+		vfs_panic( "Could not mount /dev fs.\n" );
+
+		return 1;
+	}
+	vfs_debugf( "Mounted RFS /dev.\n" );
 
 	//vfs_mkdir( 1, "/", "proc" );
 
@@ -584,11 +593,11 @@ void vfs_test_afs( void ) {
 	
 	vfs_test_cat( "/home/adam/magic" );
 	
-	vfs_test_cat( "/share/test_data/picard_history.txt" );
+	//vfs_test_cat( "/share/test_data/picard_history.txt" );
 
 	vifs_mkdir( "/usr" );
 	vifs_mkdir( "/usr/bin" );
-	vfs_test_cat( "/share/test_data/picard_history.txt" );
+	//vfs_test_cat( "/share/test_data/picard_history.txt" );
 
 	afs_dump_diagnostic_data();
 }
@@ -602,6 +611,11 @@ void vfs_test_ramfs( void ) {
 	char hello_data_b[] = "Another testing file.\nMulti-line?\nWooho!\n";
 	char proc_build_num[] = "1984";
 	char proc_magic[] = "NCC-1701-D";
+	char ram0[] = "RAM file 0";
+	char ram1[] = "RAMM file 1";
+
+	vfs_test_create_file( "/dev", "ram0", ram0, sizeof(ram0) );
+	vfs_test_create_file( "/dev", "ram1", ram1, sizeof(ram1) );
 
 	vfs_test_create_file( "/proc", "test.txt", hello_data, sizeof(hello_data) );
 	vfs_test_create_file( "/proc", "test_2.txt", hello_data_b, sizeof(hello_data_b) );
@@ -612,9 +626,12 @@ void vfs_test_ramfs( void ) {
 	vfs_test_ls( "/" );
 	vfs_test_ls( "/proc" );
 	vfs_test_ls( "/proc/build" );
+	vfs_test_ls( "/dev" );
 	
 	vfs_test_cat( "/proc/magic" );
 	vfs_test_cat( "/proc/build/number" );
+	vfs_test_cat( "/dev/ram0" );
+	vfs_test_cat( "/dev/ram1" );
 }
 
 /**
@@ -736,7 +753,7 @@ void vfs_test_cat( char *pathname ) {
 
 	vfs_debugf( "cat %s\n", pathname );
 	vfs_debugf( "size: %d\n", stats.size );
-	//vfs_debugf( "%s\n", data );
+		vfs_debugf( "%s\n", data );
 	vfs_debugf( "\n" );
 }
 

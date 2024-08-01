@@ -78,6 +78,7 @@ typedef struct {
 typedef struct {
 	uint8_t type;   		// Type of inode
 	uint8_t fs_type;		// File system that controls this inode
+	uint8_t fs_id;			// File system id for the inode
 	inode_id id;			// inode id
 	bool is_mount_point;	// true if this is a mount point for a fs
 	vfs_directory *dir_inodes;	// used for directory listing
@@ -92,9 +93,11 @@ typedef struct {
  * 
  */
 typedef struct {
-	char name[VFS_NAME_MAX];
+	char name[255];
 	inode_id id;
 	vfs_inode *ptr;
+
+	void *next;
 } vfs_directory_item;
 
 /**
@@ -141,6 +144,7 @@ typedef struct {
  */
 typedef struct {
 	uint8_t type;			// type of fs
+	uint8_t id;				// assigned fs id
 	inode_id mount_inode;	// inode id of where the file system is mounted
 	vfs_operations op;
 	void *next_fs; 			// used in vfs code to link to the next FS

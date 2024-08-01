@@ -2,6 +2,7 @@
 #include "rfs.h"
 
 rfs_file_list rfs_files;
+rfs_mounted rfs_mounts;
 
 /**
  * @brief Initalizes the Ram File System
@@ -72,25 +73,56 @@ int rfs_stat( inode_id id, vfs_stat_data *stat ) {
  * @return int VFS_ERROR_NONE if successful, otherwise VFS_ERROR_
  */
 int rfs_mount( inode_id id, char *path, uint8_t *data_root ) {
-	rfs_files.count = 1;
-	rfs_files.head = vfs_malloc( sizeof(rfs_file_list_el) );
+	// Register this mount point
+	rfs_mounted *mnt = NULL;
 
-	if( rfs_files.head == NULL ) {
+	bool found = false;
+	if( rfs_mounts.id == 0 ) {
+		mnt = &rfs_mounts;
+	} else {
+		rfs_mounted *head = &rfs_mounts;
+
+		do {
+			if( head->next == NULL ) {
+				head->next = vfs_malloc(sizeof(rfs_mounted));
+				mnt = head->next;
+				found = true;
+			}
+			head = head->next;
+		} while( head != NULL && !found );
+	}
+
+	if( mnt == NULL ) {
 		return VFS_ERROR_MEMORY;
 	}
 
-	rfs_files.tail = rfs_files.head;
+	mnt->id = id;
+	mnt->next = NULL;
+	mnt->file_list.tail = NULL;
+	strcpy( mnt->path, path );
 
-	rfs_files.head->file = vfs_malloc( sizeof(rfs_file) );
+	vfs_inode *ino = vfs_lookup_inode_ptr_by_id(id);
+	mnt->fs_id = ino->fs_id;
 
-	if( rfs_files.head->file == NULL ) {
+	mnt->file_list.count = 1;
+	mnt->file_list.head = vfs_malloc( sizeof(rfs_file_list_el) );
+
+	if( mnt->file_list.head == NULL ) {
 		return VFS_ERROR_MEMORY;
 	}
 
-	rfs_files.head->file->rfs_file_type = RFS_FILE_TYPE_DIR;
-	rfs_files.head->file->vfs_inode_id = id;
-	rfs_files.head->file->vfs_parent_inode_id = 0;
-	strcpy( rfs_files.head->file->name, "/" );
+	mnt->file_list.tail = mnt->file_list.head;
+
+	mnt->file_list.head->file = vfs_malloc( sizeof(rfs_file) );
+
+	if( mnt->file_list.head->file == NULL ) {
+		return VFS_ERROR_MEMORY;
+	}
+
+	mnt->file_list.head->file->rfs_file_type = RFS_FILE_TYPE_DIR;
+	mnt->file_list.head->file->vfs_inode_id = id;
+	mnt->file_list.head->file->vfs_parent_inode_id = 0;
+	strcpy( mnt->file_list.head->file->name, "/" );
 
 	rfs_file_list *root_dir_list = vfs_malloc( sizeof(rfs_file_list) );
 
@@ -101,9 +133,35 @@ int rfs_mount( inode_id id, char *path, uint8_t *data_root ) {
 	root_dir_list->head = NULL;
 	root_dir_list->tail = NULL;
 	root_dir_list->count = 0;
-	rfs_files.head->file->dir_list = (void *)root_dir_list;
+	mnt->file_list.head->file->dir_list = (void *)root_dir_list;
 
 	return VFS_ERROR_NONE;
+}
+
+/**
+ * @brief Gets an RFS file list given the fs_id
+ * 
+ * @param fs_id 
+ * @return rfs_file_list* 
+ */
+rfs_file_list *rfs_get_file_list_by_fs_id( uint8_t fs_id ) {
+	rfs_mounted *mnt = NULL;
+
+	if( rfs_mounts.id == 0 ) {
+		return NULL;
+	}
+
+	rfs_mounted *head = &rfs_mounts;
+
+	do {
+		if( head->fs_id == fs_id ) {
+			return &head->file_list;
+		}
+
+		head = head->next;
+	} while( head != NULL );
+
+	return NULL;
 }
 
 /**
@@ -117,9 +175,11 @@ int rfs_mount( inode_id id, char *path, uint8_t *data_root ) {
  */
 int rfs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 	// Allocate a VFS inode for this object, fill in details
+	vfs_inode *parent_node = vfs_lookup_inode_ptr_by_id(parent);
 	vfs_inode *node = vfs_allocate_inode();
 	node->fs_type = FS_TYPE_RFS;
 	node->type = type;
+	node->fs_id = parent_node->fs_id;
 
 	// Allocate a RFS file, fill in details
 	rfs_file *f = vfs_malloc( sizeof(rfs_file) );
@@ -168,8 +228,12 @@ int rfs_create( inode_id parent, uint8_t type, char *path, char *name ) {
 	rfs_file_list_el *main_file_list_el = vfs_malloc( sizeof(rfs_file_list_el) );
 	main_file_list_el->file = f;
 	main_file_list_el->next = NULL;
-	rfs_files.tail->next = main_file_list_el;
-	rfs_files.tail = main_file_list_el;
+
+	vfs_debugf("fs id: %d\n", node->fs_id );
+
+	rfs_file_list *fl = rfs_get_file_list_by_fs_id(node->fs_id);
+	fl->tail->next = main_file_list_el;
+	fl->tail = main_file_list_el;
 
 	return node->id;
 }
@@ -181,8 +245,11 @@ int rfs_create( inode_id parent, uint8_t type, char *path, char *name ) {
  * @return rfs_file* pointer to rfs_file pointer, NULL on failure
  */
 rfs_file *rfs_lookup_by_inode_id( inode_id id ) {
+	vfs_inode *ino = vfs_lookup_inode_ptr_by_id( id );
+	rfs_file_list *rfs_files = rfs_get_file_list_by_fs_id( ino->fs_id );
+
 	rfs_file *f = NULL;
-	rfs_file_list_el *head = rfs_files.head;
+	rfs_file_list_el *head = rfs_files->head;
 	bool keep_going = true;
 	bool found = false;
 

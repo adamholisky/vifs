@@ -8,6 +8,8 @@ vfs_filesystem *file_systems;
 vfs_inode root_inode;
 vfs_inode *inode_index_tail;
 inode_id vfs_inode_id_top;
+uint8_t fs_id_top;
+vfs_directory_list mount_points;
 
 vfs_cache_list cache;
 uint64_t cache_hits;
@@ -47,6 +49,11 @@ int vfs_initalize( void ) {
 	inode_index_tail = &root_inode;
 
 	vfs_inode_id_top = 2;
+
+	fs_id_top = 1;
+
+	mount_points.count = 0;
+	mount_points.entry = NULL;
 
 	vfs_cache_initalize();
 
@@ -199,6 +206,7 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 	vfs_filesystem *fs = vfs_get_fs( fs_type );
 	vfs_inode *mount_point = NULL;
 
+	vfs_debugf("b");
 	mount_point = vfs_lookup_inode_ptr( path );
 	
 	if( mount_point == NULL ) {
@@ -217,14 +225,43 @@ int vfs_mount( uint8_t fs_type, uint8_t *data, char *path ) {
 		vfs_debugf( "Mount point \"%s\" is not a directory.\n", path );
 		return VFS_ERROR_NOT_A_DIRECTORY;
 	}
+
+	vfs_debugf("a");
 	
 	mount_point->fs_type = fs_type;
+	mount_point->fs_id = fs_id_top++;
 	mount_point->is_mount_point = true;
+
+	vfs_directory_item *mp_list_item = NULL;
+	bool found = false;
+	if( mount_points.count == 0 ) {
+		mount_points.entry = vfs_malloc(sizeof(vfs_directory_item));
+		mount_points.count++;
+		mp_list_item = mount_points.entry;
+	} else {
+		vfs_directory_item *head = mount_points.entry;
+		do {
+			if( head->next == NULL ) {
+				head->next = vfs_malloc(sizeof(vfs_directory_item));
+				mp_list_item = head->next;
+				found = true;
+			}
+
+			head = head->next;
+		} while( head != NULL && !found );
+	}
+
+	mp_list_item->id = mount_point->id;
+	mp_list_item->ptr = mount_point;
+	strcpy(mp_list_item->name, path);
+	mount_points.count++;
+
+	vfs_debugf("done");
 
 	return fs->op.mount( mount_point->id, path, data );
 }
 
-/**
+/*
  * @brief Opens a file
  * 
  * @param id 
@@ -431,6 +468,7 @@ vfs_inode *vfs_allocate_inode( void ) {
 	vfs_inode *node = vfs_malloc( sizeof(vfs_inode) );
 
 	node->fs_type = 0;
+	node->fs_id = 0;
 	node->id = vfs_inode_id_top++;
 	node->type = 0;
 	node->is_mount_point = false;

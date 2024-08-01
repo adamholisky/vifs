@@ -29,7 +29,7 @@
 				"type": "gdb",
 				"request": "launch",
 				"target": "./vifs",
-				"arguments": "ls /",
+				"arguments": "ostests",
 				"cwd": "${workspaceRoot}",
 				"valuesFormatting": "parseText"
 			}
